@@ -1,0 +1,563 @@
+import { useEffect, useState } from "react"
+import {
+    createProduct, updateProduct,
+    createMaterial, updateMaterial,
+    createProvider, updateProvider,
+    getCategories, getStatuses, getProviders,
+    createProductDetail, updateProductDetail,
+    createMaterialDetail, //updateMaterialDetail
+} from "../utils/db"
+
+export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType }) {
+    const [formData, setFormData] = useState({
+        name: "",
+        description: "",
+        category_id: "",
+        price: "",
+        quantity: "",
+        direction: "",
+        phone: "",
+        type_id: "",
+        status_id: "",
+        provided_id: ""
+    })
+
+    const [categories, setCategories] = useState([])
+    const [statuses, setStatuses] = useState([])
+    const [providers, setProviders] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [loadingProviders, setLoadingProviders] = useState(false)
+
+    // Cargar proveedores al abrir el modal
+    useEffect(() => {
+        const loadProviders = async () => {
+            if (isOpen && (itemType === "productos" || itemType === "materiales")) {
+                setLoadingProviders(true)
+                try {
+                    const providersData = await getProviders()
+                    console.log("Proveedores cargados:", providersData)
+                    setProviders(providersData || [])
+                } catch (error) {
+                    console.error("Error cargando proveedores:", error)
+                } finally {
+                    setLoadingProviders(false)
+                }
+            }
+        }
+
+        loadProviders()
+    }, [isOpen, itemType])
+
+    // Cargar datos necesarios al abrir el modal
+    useEffect(() => {
+        const loadData = async () => {
+            if (isOpen) {
+                setLoading(true)
+                try {
+                    // Cargar categorías para productos y platos
+                    if (itemType === "productos" || itemType === "platos") {
+                        const categoriesData = await getCategories()
+                        setCategories(categoriesData || [])
+                    }
+
+                    // Cargar estados para platos
+                    if (itemType === "platos") {
+                        const statusesData = await getStatuses()
+                        setStatuses(statusesData || [])
+                    }
+                } catch (error) {
+                    console.error("Error cargando datos:", error)
+                } finally {
+                    setLoading(false)
+                }
+            }
+        }
+
+        loadData()
+    }, [isOpen, itemType])
+
+    // Resetear el formulario cuando cambia el item o se abre/cierra el modal
+    useEffect(() => {
+        if (isOpen && mode === "edit" && item) {
+            console.log("Editando item:", item)
+
+            switch (itemType) {
+                case "productos": {
+                    setFormData({
+                        name: item.name || "",
+                        description: item.product_detail?.description || "",
+                        category_id: item.category_id || "",
+                        price: item.product_detail?.price || "",
+                        quantity: item.product_detail?.quantity || "",
+                        provided_id: item.product_detail?.provider?.provider_id || ""
+                    })
+                    console.log("Proveedor seleccionado:", item.product_detail?.provider?.provider_id)
+                    break
+                }
+                case "materiales": {
+                    setFormData({
+                        name: item.name || "",
+                        type_id: item.type_id || "",
+                        type_name: item.type_name || "",
+                        materials_id: item.materials_id || "",
+                        materials_details_id: item.materials_details_id || ""
+                    })
+                    break
+                }
+                case "proveedores": {
+                    setFormData({
+                        name: item.name || "",
+                        direction: item.direction || "",
+                        phone: item.phone || ""
+                    })
+                    break
+                }
+                default: {
+                    setFormData({
+                        name: item.name || ""
+                    })
+                }
+            }
+        } else if (isOpen && mode === "add") {
+            // Resetear formulario para añadir nuevo elemento
+            setFormData({
+                name: "",
+                description: "",
+                category_id: "",
+                price: "",
+                quantity: "",
+                direction: "",
+                phone: "",
+                type_id: "",
+                status_id: "",
+                provided_id: ""
+            })
+        }
+    }, [isOpen, item, mode, itemType])
+
+    const handleChange = (e) => {
+        const { name, value } = e.target
+        setFormData((prev) => ({
+            ...prev,
+            [name]: value,
+        }))
+    }
+
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setLoading(true)
+
+        try {
+            let result
+
+            // Crear o actualizar según el tipo de elemento y modo
+            if (mode === "add") {
+                switch (itemType) {
+                    case "productos": {
+                        // Primero crear el detalle del producto
+                        const productDetailData = {
+                            description: formData.description,
+                            quantity: parseInt(formData.quantity) || 0,
+                            price: parseFloat(formData.price) || 0,
+                            provided_id: formData.provided_id
+                        }
+
+                        const productDetailResult = await createProductDetail(productDetailData)
+
+                        if (productDetailResult && productDetailResult.product_detail) {
+                            // Luego crear el producto con el ID del detalle
+                            const productData = {
+                                name: formData.name,
+                                category_id: formData.category_id,
+                                products_details_id: productDetailResult.product_detail.products_details_id
+                            }
+
+                            result = await createProduct(productData)
+                        }
+                        break
+                    }
+                    case "materiales": {
+                        // Primero crear el detalle del material
+                        const materialDetailData = {
+                            description: formData.description,
+                            quantity: parseInt(formData.quantity) || 0,
+                            price: parseFloat(formData.price) || 0,
+                            provided_id: formData.provided_id
+                        }
+
+                        const materialDetailResult = await createMaterialDetail(materialDetailData)
+
+                        if (materialDetailResult && materialDetailResult.material_detail) {
+                            // Luego crear el material con el ID del detalle
+                            const materialData = {
+                                name: formData.name,
+                                type_id: parseInt(formData.type_id) || 1,
+                                materials_details_id: materialDetailResult.material_detail.materials_details_id
+                            }
+
+                            result = await createMaterial(materialData)
+                        }
+                        break
+                    }
+                    case "proveedores": {
+                        const providerData = {
+                            name: formData.name,
+                            direction: formData.direction,
+                            phone: formData.phone
+                        }
+
+                        result = await createProvider(providerData)
+                        break
+                    }
+                }
+            } else if (mode === "edit") {
+                switch (itemType) {
+                    case "productos": {
+                        // Actualizar el producto
+                        const productData = {
+                            name: formData.name,
+                            category_id: formData.category_id
+                        }
+
+                        // Si hay un detalle de producto, actualizarlo también
+                        if (item.product_detail) {
+                            const productDetailData = {
+                                description: formData.description,
+                                quantity: parseInt(formData.quantity) || 0,
+                                price: parseFloat(formData.price) || 0,
+                                provided_id: formData.provided_id
+                            }
+
+                            // Actualizar el detalle del producto
+                            await updateProductDetail(item.product_detail.products_details_id, productDetailData)
+                        }
+
+                        result = await updateProduct(item.products_id, productData)
+                        break
+                    }
+                    case "materiales": {
+                        // Actualizar el material
+                        const materialData = {
+                            name: formData.name,
+                            type_id: parseInt(formData.type_id) || 1
+                        }
+
+                        result = await updateMaterial(item.materials_id, materialData)
+                        break
+                    }
+                    case "proveedores": {
+                        const providerData = {
+                            name: formData.name,
+                            direction: formData.direction,
+                            phone: formData.phone
+                        }
+
+                        result = await updateProvider(item.provider_id, providerData)
+                        break
+                    }
+                }
+            }
+
+            // Notificar al componente padre sobre el guardado exitoso
+            onSave(result, mode)
+            onClose()
+        } catch (error) {
+            console.error("Error al guardar:", error)
+            // Aquí podrías mostrar un mensaje de error al usuario
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    // Si el modal no está abierto, no renderizar nada
+    if (!isOpen) return null
+
+    // Determinar qué campos mostrar según el tipo de item
+    const renderFields = () => {
+        switch (itemType) {
+            case "productos":
+                return (
+                    <>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                required
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                            <textarea
+                                name="description"
+                                value={formData.description}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                rows="3"
+                            ></textarea>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                                <select
+                                    name="category_id"
+                                    value={formData.category_id}
+                                    onChange={handleChange}
+                                    className="w-full p-2 border rounded-md"
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {categories.map(category => (
+                                        <option key={category.category_id} value={category.category_id}>
+                                            {category.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                                <input
+                                    type="number"
+                                    name="quantity"
+                                    value={formData.quantity}
+                                    onChange={handleChange}
+                                    className="w-full p-2 border rounded-md"
+                                />
+                            </div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Precio</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-2">$</span>
+                                <input
+                                    type="number"
+                                    name="price"
+                                    value={formData.price}
+                                    onChange={handleChange}
+                                    className="w-full p-2 pl-6 border rounded-md"
+                                    step="0.01"
+                                />
+                            </div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Proveedor {loadingProviders && "(Cargando...)"}
+                            </label>
+                            <select
+                                name="provided_id"
+                                value={formData.provided_id}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                disabled={loadingProviders}
+                            >
+                                <option value="">Seleccionar...</option>
+                                {providers.map(provider => (
+                                    <option key={provider.provider_id} value={provider.provider_id}>
+                                        {provider.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {providers.length === 0 && !loadingProviders && (
+                                <p className="text-sm text-red-500 mt-1">
+                                    No hay proveedores disponibles. Por favor, añada proveedores primero.
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )
+            case "materiales":
+                return (
+                    <>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                required
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                            <select
+                                name="type_id"
+                                value={formData.type_id}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                            >
+                                <option value="">Seleccionar...</option>
+                                <option value="1">Materia Prima</option>
+                                <option value="2">Herramienta</option>
+                                <option value="3">Empaque</option>
+                            </select>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                            <textarea
+                                name="description"
+                                value={formData.description}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                rows="3"
+                            ></textarea>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
+                                <input
+                                    type="number"
+                                    name="quantity"
+                                    value={formData.quantity}
+                                    onChange={handleChange}
+                                    className="w-full p-2 border rounded-md"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Precio por unidad</label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2">$</span>
+                                    <input
+                                        type="number"
+                                        name="price"
+                                        value={formData.price}
+                                        onChange={handleChange}
+                                        className="w-full p-2 pl-6 border rounded-md"
+                                        step="0.01"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Proveedor {loadingProviders && "(Cargando...)"}
+                            </label>
+                            <select
+                                name="provided_id"
+                                value={formData.provided_id}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                disabled={loadingProviders}
+                            >
+                                <option value="">Seleccionar...</option>
+                                {providers.map(provider => (
+                                    <option key={provider.provider_id} value={provider.provider_id}>
+                                        {provider.name}
+                                    </option>
+                                ))}
+                            </select>
+                            {providers.length === 0 && !loadingProviders && (
+                                <p className="text-sm text-red-500 mt-1">
+                                    No hay proveedores disponibles. Por favor, añada proveedores primero.
+                                </p>
+                            )}
+                        </div>
+                    </>
+                )
+            case "proveedores":
+                return (
+                    <>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de la empresa</label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                                required
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                            <input
+                                type="text"
+                                name="direction"
+                                value={formData.direction}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                            <input
+                                type="tel"
+                                name="phone"
+                                value={formData.phone}
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded-md"
+                            />
+                        </div>
+                    </>
+                )
+            default:
+                return (
+                    <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                        <input
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            className="w-full p-2 border rounded-md"
+                            required
+                        />
+                    </div>
+                )
+        }
+    }
+
+    // Corregir el nombre del tipo de elemento para mostrar en el título
+    const getItemTypeName = () => {
+        switch (itemType) {
+            case "productos": return "producto"
+            case "materiales": return "material"
+            case "proveedores": return "proveedor"
+            default: return itemType
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 bg-gray-800/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-lg w-full max-w-md">
+                <div className="flex justify-between items-center border-b p-4">
+                    <h3 className="text-lg font-medium">
+                        {mode === "add" ? `Agregar ${getItemTypeName()}` : `Editar ${getItemTypeName()}`}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 focus:outline-none">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                            <path
+                                fillRule="evenodd"
+                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                            />
+                        </svg>
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="p-4">
+                    {renderFields()}
+                    <div className="flex justify-end space-x-3 mt-6">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                            disabled={loading}
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:bg-green-300"
+                            disabled={loading}
+                        >
+                            {loading ? "Procesando..." : (mode === "add" ? "Agregar" : "Guardar cambios")}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    )
+}

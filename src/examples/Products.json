@@ -1,0 +1,60 @@
+[
+    {
+        "category": {
+            "category_id": "6b9bd380-a11a-4ef8-bb6d-a0eebc999c0b",
+            "description": "Platos principales con carne",
+            "name": "Carnes"
+        },
+        "category_id": "6b9bd380-a11a-4ef8-bb6d-a0eebc999c0b",
+        "dishes": [
+            {
+                "dishes_id": "17eebc99-9c0b-4ef8-bb6d-6bb9bd380add",
+                "name": "Filete Especial",
+                "status_id": "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a55"
+            }
+        ],
+        "dishes_count": 1,
+        "name": "Filete de ternera",
+        "product_detail": {
+            "description": "Carne de res premium",
+            "price": 15.99,
+            "products_details_id": "a1eebc99-9c0b-4ef8-bb6d-6bb9bd380a77",
+            "provider": {
+                "name": "Carnicería Real",
+                "provider_id": "8c9bd380-a11a-4ef8-bb6d-a0eebc999c0d"
+            },
+            "quantity": 100
+        },
+        "products_details_id": "a1eebc99-9c0b-4ef8-bb6d-6bb9bd380a77",
+        "products_id": "c3eebc99-9c0b-4ef8-bb6d-6bb9bd380a99"
+    },
+    {
+        "category": {
+            "category_id": "7b9bd380-a11a-4ef8-bb6d-a0eebc999c0c",
+            "description": "Postres y dulces",
+            "name": "Postres"
+        },
+        "category_id": "7b9bd380-a11a-4ef8-bb6d-a0eebc999c0c",
+        "dishes": [
+            {
+                "dishes_id": "28eebc99-9c0b-4ef8-bb6d-6bb9bd380aee",
+                "name": "Tarta Premium",
+                "status_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380a66"
+            }
+        ],
+        "dishes_count": 1,
+        "name": "Tarta de chocolate",
+        "product_detail": {
+            "description": "Chocolate belga",
+            "price": 8.75,
+            "products_details_id": "b2eebc99-9c0b-4ef8-bb6d-6bb9bd380a88",
+            "provider": {
+                "name": "Dulces S.A.",
+                "provider_id": "9d9bd380-a11a-4ef8-bb6d-a0eebc999c0e"
+            },
+            "quantity": 50
+        },
+        "products_details_id": "b2eebc99-9c0b-4ef8-bb6d-6bb9bd380a88",
+        "products_id": "d4eebc99-9c0b-4ef8-bb6d-6bb9bd380aaa"
+    }
+]

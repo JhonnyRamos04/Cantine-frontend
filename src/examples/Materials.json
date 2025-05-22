@@ -1,0 +1,16 @@
+[
+    {
+        "materials_details_id": "39eebc99-9c0b-4ef8-bb6d-6bb9bd380aff",
+        "materials_id": "51eebc99-9c0b-4ef8-bb6d-6bb9bd380b11",
+        "name": "Envases",
+        "type_id": 1,
+        "type_name": "Materia Prima"
+    },
+    {
+        "materials_details_id": "40eebc99-9c0b-4ef8-bb6d-6bb9bd380baa",
+        "materials_id": "62eebc99-9c0b-4ef8-bb6d-6bb9bd380b22",
+        "name": "Cubiertos",
+        "type_id": 2,
+        "type_name": "Herramienta"
+    }
+]

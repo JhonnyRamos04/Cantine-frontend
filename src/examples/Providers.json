@@ -1,0 +1,24 @@
+[
+    {
+        "direction": "Calle Mayor 5",
+        "material_details_count": 1,
+        "name": "Carnicería Real",
+        "phone": "912345678",
+        "product_details_count": 1,
+        "provider_id": "8c9bd380-a11a-4ef8-bb6d-a0eebc999c0d",
+        "total_material_value": 150,
+        "total_product_value": 1599,
+        "total_value": 1749
+    },
+    {
+        "direction": "Avenida Dulce 20",
+        "material_details_count": 1,
+        "name": "Dulces S.A.",
+        "phone": "934567890",
+        "product_details_count": 1,
+        "provider_id": "9d9bd380-a11a-4ef8-bb6d-a0eebc999c0e",
+        "total_material_value": 150,
+        "total_product_value": 437.5,
+        "total_value": 587.5
+    }
+]
