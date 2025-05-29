@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react"
-import { Category } from "../Category"
+"use client"
+
+import { useState, useEffect } from "react"
+import { Plus, Search, RefreshCw } from "lucide-react"
 import { ItemList } from "../ItemList"
 import { ItemFormModal } from "../ItemFormModal"
 import {
@@ -9,22 +11,29 @@ import {
     updateMaterial,
     createMaterialDetail,
     updateMaterialDetail,
-    getMaterialDetailById
+    getMaterialDetailById,
 } from "../../utils/db"
 
-export const Materials = () => {
-
-    const [items, setItems] = useState([])
+export function Materials() {
+    const [materials, setMaterials] = useState([])
     const [loading, setLoading] = useState(true)
+    const [searchTerm, setSearchTerm] = useState("")
+    const [isModalOpen, setIsModalOpen] = useState(false)
+    const [editingItem, setEditingItem] = useState(null)
+    const [modalMode, setModalMode] = useState("add")
     const [error, setError] = useState(null)
 
-    // Función para cargar materiales que podemos llamar cuando necesitemos actualizar
+    useEffect(() => {
+        loadMaterials()
+    }, [])
+
     const loadMaterials = async () => {
+        setLoading(true)
+        setError(null)
         try {
-            setLoading(true)
-            const materialsData = await getMaterials()
-            console.log("Materiales cargados:", materialsData)
-            setItems(materialsData)
+            const data = await getMaterials()
+            console.log("Materiales cargados:", data)
+            setMaterials(data || [])
         } catch (error) {
             console.error("Error cargando materiales:", error)
             setError("Error al cargar los materiales. Por favor, intente de nuevo.")
@@ -33,66 +42,37 @@ export const Materials = () => {
         }
     }
 
-    // Cargar materiales al montar el componente
-    useEffect(() => {
-        loadMaterials()
-    }, [])
-
-    const [isModalOpen, setIsModalOpen] = useState(false)
-    const [currentItem, setCurrentItem] = useState(null)
-    const [modalMode, setModalMode] = useState("add") // "add" o "edit"
-
-    const handleDelete = async (id) => {
-        try {
-            // Mostrar confirmación antes de eliminar
-            if (!confirm("¿Está seguro de que desea eliminar este material?")) {
-                return
-            }
-
-            setLoading(true)
-            console.log("Eliminando material con ID:", id)
-            const result = await deleteMaterial(id)
-
-            if (result && result.message) {
-                // Recargar materiales para reflejar los cambios (no siempre es necesario)
-                await loadMaterials()
-                alert("Material eliminado con éxito")
-            } else {
-                throw new Error("No se pudo eliminar el material")
-            }
-        } catch (error) {
-            console.error("Error eliminando material:", error)
-            alert(`Error al eliminar el material: ${error.message}`)
-        } finally {
-            setLoading(false)
-        }
+    const handleAdd = () => {
+        setEditingItem(null)
+        setModalMode("add")
+        setIsModalOpen(true)
     }
 
-    const handleEdit = async (id) => {
+    const handleEdit = async (materialId) => {
         try {
-            const itemToEdit = items.find(item => item.materials_id === id)
-            if (itemToEdit) {
-                console.log("Editando material:", itemToEdit)
+            const material = materials.find((m) => m.materials_id === materialId)
+            if (material) {
+                console.log("Editando material:", material)
 
                 // Si necesitamos obtener más detalles del material
-                if (itemToEdit.materials_details_id) {
+                if (material.materials_details_id) {
                     try {
-                        const detailData = await getMaterialDetailById(itemToEdit.materials_details_id)
+                        const detailData = await getMaterialDetailById(material.materials_details_id)
                         if (detailData) {
                             // Combinar los datos del material con sus detalles
-                            itemToEdit.detail = detailData
+                            material.detail = detailData
                         }
                     } catch (detailError) {
                         console.error("Error obteniendo detalles del material:", detailError)
                     }
                 }
 
-                setCurrentItem(itemToEdit)
+                setEditingItem(material)
                 setModalMode("edit")
                 setIsModalOpen(true)
             } else {
-                console.error("Material no encontrado con ID:", id)
-                alert(`Material con ID ${id} no encontrado`)
+                console.error("Material no encontrado con ID:", materialId)
+                alert(`Material con ID ${materialId} no encontrado`)
             }
         } catch (error) {
             console.error("Error preparando edición:", error)
@@ -100,10 +80,26 @@ export const Materials = () => {
         }
     }
 
-    const handleAdd = () => {
-        setCurrentItem(null)
-        setModalMode("add")
-        setIsModalOpen(true)
+    const handleDelete = async (materialId) => {
+        if (window.confirm("¿Estás seguro de que quieres eliminar este material?")) {
+            try {
+                setLoading(true)
+                console.log("Eliminando material con ID:", materialId)
+                const result = await deleteMaterial(materialId)
+
+                if (result && result.message) {
+                    await loadMaterials()
+                    alert("Material eliminado con éxito")
+                } else {
+                    throw new Error("No se pudo eliminar el material")
+                }
+            } catch (error) {
+                console.error("Error eliminando material:", error)
+                alert(`Error al eliminar el material: ${error.message}`)
+            } finally {
+                setLoading(false)
+            }
+        }
     }
 
     const handleSave = async (formData, mode) => {
@@ -115,9 +111,9 @@ export const Materials = () => {
                 // Primero crear el detalle del material
                 const materialDetailData = {
                     description: formData.description || "",
-                    quantity: parseInt(formData.quantity) || 0,
-                    price: parseFloat(formData.price) || 0,
-                    provided_id: formData.provided_id || null
+                    quantity: Number.parseInt(formData.quantity) || 0,
+                    price: Number.parseFloat(formData.price) || 0,
+                    provided_id: formData.provided_id || null,
                 }
 
                 console.log("Creando detalle de material:", materialDetailData)
@@ -127,15 +123,14 @@ export const Materials = () => {
                     // Luego crear el material con el ID del detalle
                     const materialData = {
                         name: formData.name,
-                        type_id: parseInt(formData.type_id) || 1,
-                        materials_details_id: detailResult.material_detail.materials_details_id
+                        type_id: Number.parseInt(formData.type_id) || 1,
+                        materials_details_id: detailResult.material_detail.materials_details_id,
                     }
 
                     console.log("Creando material:", materialData)
                     result = await createMaterial(materialData)
 
                     if (result && result.material) {
-                        // Recargar materiales para reflejar los cambios
                         await loadMaterials()
                         alert("Material creado con éxito")
                     } else {
@@ -144,25 +139,25 @@ export const Materials = () => {
                 } else {
                     throw new Error("No se pudo crear el detalle del material")
                 }
-            } else if (mode === "edit" && currentItem) {
+            } else if (mode === "edit" && editingItem) {
                 // Actualizar el material - solo enviamos los campos que el backend espera
                 const materialData = {
-                    name: formData.name
+                    name: formData.name,
                 }
 
                 // Solo incluir type_id si existe
                 if (formData.type_id) {
-                    materialData.type_id = parseInt(formData.type_id) || 1
+                    materialData.type_id = Number.parseInt(formData.type_id) || 1
                 }
 
                 console.log("Actualizando material:", materialData)
-                console.log("ID del material:", currentItem.materials_id)
+                console.log("ID del material:", editingItem.materials_id)
 
                 // Actualizar el material
-                result = await updateMaterial(currentItem.materials_id, materialData)
+                result = await updateMaterial(editingItem.materials_id, materialData)
 
                 // Si hay un detalle de material, actualizarlo también
-                if (currentItem.materials_details_id) {
+                if (editingItem.materials_details_id) {
                     // Solo incluir los campos que el backend espera
                     const materialDetailData = {}
 
@@ -171,11 +166,11 @@ export const Materials = () => {
                     }
 
                     if (formData.quantity !== undefined) {
-                        materialDetailData.quantity = parseInt(formData.quantity) || 0
+                        materialDetailData.quantity = Number.parseInt(formData.quantity) || 0
                     }
 
                     if (formData.price !== undefined) {
-                        materialDetailData.price = parseFloat(formData.price) || 0
+                        materialDetailData.price = Number.parseFloat(formData.price) || 0
                     }
 
                     if (formData.provided_id) {
@@ -183,13 +178,10 @@ export const Materials = () => {
                     }
 
                     console.log("Actualizando detalle de material:", materialDetailData)
-                    console.log("ID del detalle:", currentItem.materials_details_id)
+                    console.log("ID del detalle:", editingItem.materials_details_id)
 
                     try {
-                        const detailResult = await updateMaterialDetail(
-                            currentItem.materials_details_id,
-                            materialDetailData
-                        )
+                        const detailResult = await updateMaterialDetail(editingItem.materials_details_id, materialDetailData)
 
                         console.log("Resultado de actualización de detalle:", detailResult)
                     } catch (detailError) {
@@ -199,7 +191,6 @@ export const Materials = () => {
                     }
                 }
 
-                // Recargar materiales para reflejar los cambios
                 await loadMaterials()
                 alert("Material actualizado con éxito")
             }
@@ -212,48 +203,57 @@ export const Materials = () => {
         }
     }
 
+    const filteredMaterials = materials.filter((material) =>
+        material.name.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
+
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Materiales</h2>
-            <div className="bg-white rounded-lg border p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold">Lista de Materiales</h2>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={loadMaterials}
-                            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-md flex items-center justify-center"
-                            disabled={loading}
-                        >
-                            <span>Actualizar</span>
-                        </button>
-                        <button
-                            onClick={handleAdd}
-                            className="w-10 h-10 bg-green-500 hover:bg-green-600 cursor-pointer hover:scale-105 text-white rounded-full flex items-center justify-center shadow-md transition-colors"
-                            disabled={loading}
-                        >
-                            <span className="text-xl">+</span>
-                        </button>
-                    </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                    <input
+                        type="text"
+                        placeholder="Buscar materiales..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    />
                 </div>
 
-                {error && (
-                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                        {error}
-                    </div>
-                )}
+                <div className="flex gap-2">
+                    <button
+                        onClick={loadMaterials}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                        disabled={loading}
+                    >
+                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                        Actualizar
+                    </button>
+
+                    <button
+                        onClick={handleAdd}
+                        className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                        disabled={loading}
+                    >
+                        <Plus size={20} />
+                        Agregar Material
+                    </button>
+                </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Materiales</h3>
+
+                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">{error}</div>}
 
                 {loading ? (
-                    <div className="text-center py-8">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
-                        <p className="mt-2 text-gray-500">Cargando materiales...</p>
+                    <div className="flex items-center justify-center py-12">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                        <p className="ml-3 text-gray-500">Cargando materiales...</p>
                     </div>
                 ) : (
-                    <ItemList
-                        items={items}
-                        onEdit={handleEdit}
-                        onDelete={handleDelete}
-                        itemType='materiales'
-                    />
+                    <ItemList items={filteredMaterials} onEdit={handleEdit} onDelete={handleDelete} itemType="materiales" />
                 )}
             </div>
 
@@ -261,7 +261,7 @@ export const Materials = () => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSave}
-                item={currentItem}
+                item={editingItem}
                 mode={modalMode}
                 itemType="materiales"
             />

@@ -1,8 +1,6 @@
-import { DeleteIcon } from "./icons/DeleteIcon"
-import { EditIcon } from "./icons/EditIcon"
+import { Edit, Trash2 } from "lucide-react"
 
 export const ItemList = ({ items, onEdit, onDelete, itemType }) => {
-
     const renderItemDetails = (item) => {
         switch (itemType) {
             case "productos":
@@ -89,35 +87,41 @@ export const ItemList = ({ items, onEdit, onDelete, itemType }) => {
     return (
         <div className="space-y-3">
             {items.map((item) => {
-                const itemId = getItemId(item);
+                const itemId = getItemId(item)
                 return (
                     <div key={itemId} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
                         <div className="flex flex-col gap-1">
                             <span className="font-medium">{getItemName(item)}</span>
                             {renderItemDetails(item)}
                         </div>
-                        <div className="flex space-x-2">
-                            <button
-                                onClick={() => {
-                                    console.log("Editando item con ID:", itemId);
-                                    onEdit(itemId);
-                                }}
-                                className="size-10 p-2 hover:scale-105 cursor-pointer bg-blue-500 text-white rounded-full flex items-center justify-center"
-                            >
-                                <EditIcon />
-                            </button>
-                            <button
-                                onClick={() => {
-                                    console.log("Eliminando item con ID:", itemId);
-                                    onDelete(itemId);
-                                }}
-                                className="size-10 p-2 hover:scale-105 cursor-pointer bg-red-500 text-white rounded-full flex items-center justify-center"
-                            >
-                                <DeleteIcon />
-                            </button>
-                        </div>
+                        {(onEdit || onDelete) && (
+                            <div className="flex space-x-2">
+                                {onEdit && (
+                                    <button
+                                        onClick={() => {
+                                            console.log("Editando item con ID:", itemId)
+                                            onEdit(itemId)
+                                        }}
+                                        className="size-10 p-2 hover:scale-105 cursor-pointer bg-blue-500 text-white rounded-full flex items-center justify-center"
+                                    >
+                                        <Edit size={16} />
+                                    </button>
+                                )}
+                                {onDelete && (
+                                    <button
+                                        onClick={() => {
+                                            console.log("Eliminando item con ID:", itemId)
+                                            onDelete(itemId)
+                                        }}
+                                        className="size-10 p-2 hover:scale-105 cursor-pointer bg-red-500 text-white rounded-full flex items-center justify-center"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
-                );
+                )
             })}
 
             {items.length === 0 && <div className="text-center py-8 text-gray-500">No hay elementos para mostrar</div>}

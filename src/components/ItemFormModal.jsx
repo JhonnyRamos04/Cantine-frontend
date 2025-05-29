@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react"
+import { X } from "lucide-react"
 import {
-    createProduct, updateProduct,
-    createMaterial, updateMaterial,
-    createProvider, updateProvider,
-    getCategories, getStatuses, getProviders,
-    createProductDetail, updateProductDetail,
-    createMaterialDetail, //updateMaterialDetail
+    createProduct,
+    updateProduct,
+    createMaterial,
+    updateMaterial,
+    createProvider,
+    updateProvider,
+    getCategories,
+    getStatuses,
+    getProviders,
+    createProductDetail,
+    updateProductDetail,
+    createMaterialDetail,
 } from "../utils/db"
 
 export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType }) {
@@ -19,7 +26,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
         phone: "",
         type_id: "",
         status_id: "",
-        provided_id: ""
+        provided_id: "",
     })
 
     const [categories, setCategories] = useState([])
@@ -89,7 +96,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         category_id: item.category_id || "",
                         price: item.product_detail?.price || "",
                         quantity: item.product_detail?.quantity || "",
-                        provided_id: item.product_detail?.provider?.provider_id || ""
+                        provided_id: item.product_detail?.provider?.provider_id || "",
                     })
                     console.log("Proveedor seleccionado:", item.product_detail?.provider?.provider_id)
                     break
@@ -100,7 +107,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         type_id: item.type_id || "",
                         type_name: item.type_name || "",
                         materials_id: item.materials_id || "",
-                        materials_details_id: item.materials_details_id || ""
+                        materials_details_id: item.materials_details_id || "",
                     })
                     break
                 }
@@ -108,13 +115,13 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                     setFormData({
                         name: item.name || "",
                         direction: item.direction || "",
-                        phone: item.phone || ""
+                        phone: item.phone || "",
                     })
                     break
                 }
                 default: {
                     setFormData({
-                        name: item.name || ""
+                        name: item.name || "",
                     })
                 }
             }
@@ -130,7 +137,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                 phone: "",
                 type_id: "",
                 status_id: "",
-                provided_id: ""
+                provided_id: "",
             })
         }
     }, [isOpen, item, mode, itemType])
@@ -157,9 +164,9 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         // Primero crear el detalle del producto
                         const productDetailData = {
                             description: formData.description,
-                            quantity: parseInt(formData.quantity) || 0,
-                            price: parseFloat(formData.price) || 0,
-                            provided_id: formData.provided_id
+                            quantity: Number.parseInt(formData.quantity) || 0,
+                            price: Number.parseFloat(formData.price) || 0,
+                            provided_id: formData.provided_id,
                         }
 
                         const productDetailResult = await createProductDetail(productDetailData)
@@ -169,7 +176,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                             const productData = {
                                 name: formData.name,
                                 category_id: formData.category_id,
-                                products_details_id: productDetailResult.product_detail.products_details_id
+                                products_details_id: productDetailResult.product_detail.products_details_id,
                             }
 
                             result = await createProduct(productData)
@@ -180,9 +187,9 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         // Primero crear el detalle del material
                         const materialDetailData = {
                             description: formData.description,
-                            quantity: parseInt(formData.quantity) || 0,
-                            price: parseFloat(formData.price) || 0,
-                            provided_id: formData.provided_id
+                            quantity: Number.parseInt(formData.quantity) || 0,
+                            price: Number.parseFloat(formData.price) || 0,
+                            provided_id: formData.provided_id,
                         }
 
                         const materialDetailResult = await createMaterialDetail(materialDetailData)
@@ -191,8 +198,8 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                             // Luego crear el material con el ID del detalle
                             const materialData = {
                                 name: formData.name,
-                                type_id: parseInt(formData.type_id) || 1,
-                                materials_details_id: materialDetailResult.material_detail.materials_details_id
+                                type_id: Number.parseInt(formData.type_id) || 1,
+                                materials_details_id: materialDetailResult.material_detail.materials_details_id,
                             }
 
                             result = await createMaterial(materialData)
@@ -203,7 +210,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         const providerData = {
                             name: formData.name,
                             direction: formData.direction,
-                            phone: formData.phone
+                            phone: formData.phone,
                         }
 
                         result = await createProvider(providerData)
@@ -216,16 +223,16 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         // Actualizar el producto
                         const productData = {
                             name: formData.name,
-                            category_id: formData.category_id
+                            category_id: formData.category_id,
                         }
 
                         // Si hay un detalle de producto, actualizarlo también
                         if (item.product_detail) {
                             const productDetailData = {
                                 description: formData.description,
-                                quantity: parseInt(formData.quantity) || 0,
-                                price: parseFloat(formData.price) || 0,
-                                provided_id: formData.provided_id
+                                quantity: Number.parseInt(formData.quantity) || 0,
+                                price: Number.parseFloat(formData.price) || 0,
+                                provided_id: formData.provided_id,
                             }
 
                             // Actualizar el detalle del producto
@@ -239,7 +246,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         // Actualizar el material
                         const materialData = {
                             name: formData.name,
-                            type_id: parseInt(formData.type_id) || 1
+                            type_id: Number.parseInt(formData.type_id) || 1,
                         }
 
                         result = await updateMaterial(item.materials_id, materialData)
@@ -249,7 +256,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         const providerData = {
                             name: formData.name,
                             direction: formData.direction,
-                            phone: formData.phone
+                            phone: formData.phone,
                         }
 
                         result = await updateProvider(item.provider_id, providerData)
@@ -296,7 +303,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                                 value={formData.description}
                                 onChange={handleChange}
                                 className="w-full p-2 border rounded-md"
-                                rows="3"
+                                rows={3}
                             ></textarea>
                         </div>
                         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -309,7 +316,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                                     className="w-full p-2 border rounded-md"
                                 >
                                     <option value="">Seleccionar...</option>
-                                    {categories.map(category => (
+                                    {categories.map((category) => (
                                         <option key={category.category_id} value={category.category_id}>
                                             {category.name}
                                         </option>
@@ -353,7 +360,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                                 disabled={loadingProviders}
                             >
                                 <option value="">Seleccionar...</option>
-                                {providers.map(provider => (
+                                {providers.map((provider) => (
                                     <option key={provider.provider_id} value={provider.provider_id}>
                                         {provider.name}
                                     </option>
@@ -402,7 +409,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                                 value={formData.description}
                                 onChange={handleChange}
                                 className="w-full p-2 border rounded-md"
-                                rows="3"
+                                rows={3}
                             ></textarea>
                         </div>
                         <div className="grid grid-cols-2 gap-4 mb-4">
@@ -443,7 +450,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                                 disabled={loadingProviders}
                             >
                                 <option value="">Seleccionar...</option>
-                                {providers.map(provider => (
+                                {providers.map((provider) => (
                                     <option key={provider.provider_id} value={provider.provider_id}>
                                         {provider.name}
                                     </option>
@@ -513,10 +520,14 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
     // Corregir el nombre del tipo de elemento para mostrar en el título
     const getItemTypeName = () => {
         switch (itemType) {
-            case "productos": return "producto"
-            case "materiales": return "material"
-            case "proveedores": return "proveedor"
-            default: return itemType
+            case "productos":
+                return "producto"
+            case "materiales":
+                return "material"
+            case "proveedores":
+                return "proveedor"
+            default:
+                return itemType
         }
     }
 
@@ -528,13 +539,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         {mode === "add" ? `Agregar ${getItemTypeName()}` : `Editar ${getItemTypeName()}`}
                     </h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 focus:outline-none">
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                                fillRule="evenodd"
-                                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                                clipRule="evenodd"
-                            />
-                        </svg>
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-4">
@@ -553,7 +558,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                             className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:bg-green-300"
                             disabled={loading}
                         >
-                            {loading ? "Procesando..." : (mode === "add" ? "Agregar" : "Guardar cambios")}
+                            {loading ? "Procesando..." : mode === "add" ? "Agregar" : "Guardar cambios"}
                         </button>
                     </div>
                 </form>
