@@ -13,7 +13,7 @@ export function DashboardContent({ activeCategory, user }) {
                 <h1 className="text-2xl font-bold text-gray-900">
                     {activeCategory === "perfil" && "Mi Perfil"}
                     {activeCategory === "productos" &&
-                        (user?.role === "admin" ? "Gestión de Productos" : "Productos Disponibles")}
+                        (user?.role === "admin" ? "Gestión de Productos" : "Nuestros Deliciosos Platos")}
                     {activeCategory === "materiales" && "Gestión de Materiales"}
                     {activeCategory === "provedores" && "Gestión de Proveedores"}
                     {activeCategory === "platos" && (user?.role === "admin" ? "Gestión de Platos" : "Mis Órdenes")}

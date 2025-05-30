@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { LogOut, Package, Wrench, Truck, ChefHat } from "lucide-react"
+import { LogOut, Package, Wrench, Truck, ChefHat, ShoppingCart } from "lucide-react"
 
 export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) => {
     const [collapsed, setCollapsed] = useState(false)
@@ -19,11 +19,11 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
                 { id: "ventas", label: "Ventas", icon: <Package size={16} /> },
             ]
         } else {
-            // Para clientes, solo mostrar perfil y tal vez un menú limitado
+            // Para clientes, mostrar menú de ecommerce
             return [
                 ...baseItems,
-                { id: "productos", label: "Ver Productos", icon: <Package size={16} /> },
-                { id: "platos", label: "Órdenes", icon: <ChefHat size={16} /> },
+                { id: "productos", label: "Nuestros Platos", icon: <ChefHat size={16} /> },
+                { id: "platos", label: "Mis Órdenes", icon: <ShoppingCart size={16} /> },
             ]
         }
     }
@@ -137,7 +137,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
 
                 {/* Footer */}
                 <div className={`p-4 text-sm text-gray-500 border-t ${collapsed ? "md:hidden" : ""}`}>
-                    <p>Cantine v1.0</p>
+                    <p>Cantine v1.5</p>
                 </div>
             </aside>
         </>

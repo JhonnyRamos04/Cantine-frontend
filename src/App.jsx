@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { Sidebar } from "./components/Sidebar"
 import { DashboardContent } from "./components/DashboardContent"
 import AuthForms from "./components/AuthForms"
+import { ToastProvider } from "./components/ui/toast-container"
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -51,34 +52,42 @@ export default function App() {
   // Mostrar loading mientras se verifica la sesión
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
+      <ToastProvider>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando...</p>
+          </div>
         </div>
-      </div>
+      </ToastProvider>
     )
   }
 
   // Si no está autenticado, mostrar formulario de auth
   if (!isAuthenticated) {
-    return <AuthForms onLoginSuccess={handleLoginSuccess} />
+    return (
+      <ToastProvider>
+        <AuthForms onLoginSuccess={handleLoginSuccess} />
+      </ToastProvider>
+    )
   }
 
   // Si está autenticado, mostrar dashboard
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="flex h-screen">
-        <Sidebar
-          activeCategory={activeCategory}
-          setActiveCategory={setActiveCategory}
-          user={user}
-          onLogout={handleLogout}
-        />
-        <main className="flex-1 overflow-auto md:ml-16 lg:ml-64">
-          <DashboardContent activeCategory={activeCategory} user={user} />
-        </main>
+    <ToastProvider>
+      <div className="min-h-screen bg-gray-50">
+        <div className="flex h-screen">
+          <Sidebar
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
+            user={user}
+            onLogout={handleLogout}
+          />
+          <main className="flex-1 overflow-auto md:ml-16 lg:ml-64">
+            <DashboardContent activeCategory={activeCategory} user={user} />
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   )
 }

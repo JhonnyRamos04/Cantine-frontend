@@ -152,7 +152,7 @@ export default function AuthForms({ onLoginSuccess }) {
                   </div>
                 </div>
                 <h2 className="text-2xl font-bold">Iniciar Sesión</h2>
-                <p className="text-green-100">Accede a tu sistema de gestión de alimentos</p>
+                <span className="text-green-100 flex justify-center items-center gap-1">Cantine<ChefHat /></span>
               </div>
 
               {/* Content */}
@@ -245,7 +245,7 @@ export default function AuthForms({ onLoginSuccess }) {
                   </div>
                 </div>
                 <h2 className="text-2xl font-bold">Crear Cuenta</h2>
-                <p className="text-emerald-100">Únete al sistema de gestión de alimentos</p>
+                <span className="text-green-100 flex justify-center items-center gap-1">Cantine<ChefHat /></span>
               </div>
 
               {/* Content */}

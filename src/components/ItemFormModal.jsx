@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import { X } from "lucide-react"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 import {
     createProduct,
     updateProduct,
@@ -268,8 +270,18 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
             // Notificar al componente padre sobre el guardado exitoso
             onSave(result, mode)
             onClose()
+
+            // Seguridad adicional para evitar XSS
+            const safeItemTypeName = getItemTypeName()
+
+            toast.success(`${mode === "add" ? "Añadido" : "Editado"} ${safeItemTypeName} exitosamente`, {
+                position: toast.POSITION.TOP_RIGHT,
+            })
         } catch (error) {
             console.error("Error al guardar:", error)
+            toast.error("Error al guardar el item", {
+                position: toast.POSITION.TOP_RIGHT,
+            })
             // Aquí podrías mostrar un mensaje de error al usuario
         } finally {
             setLoading(false)
@@ -563,6 +575,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                     </div>
                 </form>
             </div>
+            <ToastContainer />
         </div>
     )
 }
