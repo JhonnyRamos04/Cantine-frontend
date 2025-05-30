@@ -62,13 +62,42 @@ async function makeRequest(url, options = {}) {
             connectionStatus.retryCount = 0
         }
 
-        return response
-    } catch (error) {
-        // Manejar diferentes tipos de errores
-        if (error.name === "AbortError") {
-            throw new Error("Timeout: El servidor no responde")
+        let data = null;
+        try {
+            // Siempre intentar parsear la respuesta como JSON, incluso si no es response.ok
+            data = await response.json();
+        } catch (jsonError) {
+            // Si la respuesta no tiene JSON pero fue exitosa (ej. 204 No Content), devolver un objeto de éxito
+            if (response.status === 204 || response.headers.get("content-length") === "0") {
+                return { success: true, message: "Operación completada exitosamente sin contenido de respuesta.", httpStatus: response.status };
+            }
+            // Si no es 204 y no hay JSON, es un error de parseo o respuesta inesperada
+            return { success: false, isHttpError: true, status: response.status, message: "No se pudo parsear la respuesta JSON del servidor." };
         }
-        throw error
+
+        if (!response.ok) {
+            // Si la respuesta no es OK (ej. 400, 500), pero se pudo parsear JSON
+            // Devolvemos un objeto de error estructurado con los datos del servidor
+            return {
+                success: false,
+                isHttpError: true,
+                status: response.status,
+                statusText: response.statusText,
+                data: data, // Los datos JSON parseados de la respuesta de error
+                message: data?.message || `Error HTTP: ${response.status} - ${response.statusText}`
+            };
+        }
+
+        // Si la respuesta es OK y se pudo parsear JSON
+        return { success: true, data: data, httpStatus: response.status };
+
+    } catch (error) {
+        // Capturar errores de red (ej. Failed to fetch, AbortError)
+        if (error.name === "AbortError") {
+            return { success: false, isConnectionError: true, error: "Timeout: El servidor no responde" };
+        }
+        // Error de red general
+        return { success: false, isConnectionError: true, error: error.message || "Error de red desconocido" };
     }
 }
 
@@ -77,14 +106,8 @@ async function makeRequest(url, options = {}) {
 // Obtener todos los productos
 export async function getProducts() {
     try {
-        const res = await makeRequest("http://localhost:5000/products/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/products/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProducts");
     } catch (error) {
         return handleConnectionError(error, "getProducts")
     }
@@ -93,14 +116,8 @@ export async function getProducts() {
 // Obtener un producto por ID
 export async function getProductById(productId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/products/${productId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/products/${productId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProductById");
     } catch (error) {
         return handleConnectionError(error, "getProductById")
     }
@@ -109,36 +126,30 @@ export async function getProductById(productId) {
 // Crear un nuevo producto
 export async function createProduct(productData) {
     try {
-        const res = await makeRequest("http://localhost:5000/products/", {
+        const result = await makeRequest("http://localhost:5000/products/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(productData),
-        })
+        });
 
-        // Verificar si la respuesta es exitosa (status 200-299)
-        if (res && res.ok) {
-            try {
-                const data = await res.json()
-                console.log("Producto creado exitosamente:", data)
-                return { success: true, product: data }
-            } catch (jsonError) {
-                console.log("Producto creado pero no se pudo parsear la respuesta JSON")
-                return { success: true, message: "Producto creado exitosamente" }
+        if (result.success) {
+            console.log("Producto creado exitosamente:", result.data);
+            return { success: true, product: result.data };
+        } else if (result.isHttpError && result.status === 400) {
+            // Si el backend devuelve 400, pero el cuerpo de la respuesta indica éxito
+            // y contiene el objeto del producto, lo consideramos un éxito.
+            if (result.data && result.data.product) {
+                console.log("Producto creado exitosamente (a pesar del 400 BAD REQUEST):", result.data.product);
+                return { success: true, product: result.data.product };
+            } else {
+                // Si es 400 pero no hay datos de producto, es un error real
+                throw new Error(result.message);
             }
         } else {
-            // Si no es exitoso, intentar obtener el mensaje de error
-            let errorMessage = "Error al crear el producto"
-            try {
-                if (res) {
-                    const errorData = await res.json()
-                    errorMessage = errorData.message || errorMessage
-                }
-            } catch (e) {
-                errorMessage = `Error ${res?.status || "Sin respuesta"}: ${res?.statusText || "Sin conexión"}`
-            }
-            throw new Error(errorMessage)
+            // Otros tipos de errores (conexión, otros errores HTTP)
+            throw new Error(result.message || "Error al crear el producto");
         }
     } catch (error) {
         return handleConnectionError(error, "createProduct")
@@ -148,20 +159,14 @@ export async function createProduct(productData) {
 // Actualizar un producto existente
 export async function updateProduct(productId, productData) {
     try {
-        const res = await makeRequest(`http://localhost:5000/products/${productId}`, {
+        const data = await makeRequest(`http://localhost:5000/products/${productId}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(productData),
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateProduct");
     } catch (error) {
         return handleConnectionError(error, "updateProduct")
     }
@@ -170,16 +175,10 @@ export async function updateProduct(productId, productData) {
 // Eliminar un producto
 export async function deleteProduct(productId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/products/${productId}`, {
+        const data = await makeRequest(`http://localhost:5000/products/${productId}`, {
             method: "DELETE",
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteProduct");
     } catch (error) {
         return handleConnectionError(error, "deleteProduct")
     }
@@ -188,14 +187,8 @@ export async function deleteProduct(productId) {
 // Obtener productos por categoría
 export async function getProductsByCategory(categoryId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/products/category/${categoryId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/products/category/${categoryId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProductsByCategory");
     } catch (error) {
         return handleConnectionError(error, "getProductsByCategory")
     }
@@ -206,14 +199,8 @@ export async function getProductsByCategory(categoryId) {
 // Obtener todos los detalles de productos
 export async function getProductDetails() {
     try {
-        const res = await makeRequest("http://localhost:5000/product-details/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/product-details/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProductDetails");
     } catch (error) {
         return handleConnectionError(error, "getProductDetails")
     }
@@ -222,14 +209,8 @@ export async function getProductDetails() {
 // Obtener un detalle de producto por ID
 export async function getProductDetailById(detailId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/product-details/${detailId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/product-details/${detailId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProductDetailById");
     } catch (error) {
         return handleConnectionError(error, "getProductDetailById")
     }
@@ -238,35 +219,28 @@ export async function getProductDetailById(detailId) {
 // Crear un nuevo detalle de producto
 export async function createProductDetail(detailData) {
     try {
-        const res = await makeRequest("http://localhost:5000/product-details/", {
+        const result = await makeRequest("http://localhost:5000/product-details/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(detailData),
-        })
+        });
 
-        // Verificar si la respuesta es exitosa (status 200-299)
-        if (res && res.ok) {
-            try {
-                const data = await res.json()
-                console.log("Detalle de producto creado exitosamente:", data)
-                return { success: true, product_detail: data }
-            } catch (jsonError) {
-                console.log("Detalle creado pero no se pudo parsear la respuesta JSON")
-                return { success: true, message: "Detalle de producto creado exitosamente" }
+        if (result.success) {
+            console.log("Detalle de producto creado exitosamente:", result.data.product_detail);
+            return { success: true, product_detail: result.data.product_detail };
+        } else if (result.isHttpError && result.status === 400) {
+            // Si el backend devuelve 400, pero el cuerpo de la respuesta indica éxito
+            // y contiene el objeto del detalle de producto, lo consideramos un éxito.
+            if (result.data && result.data.product_detail) {
+                console.log("Detalle de producto creado exitosamente (a pesar del 400 BAD REQUEST):", result.data.product_detail);
+                return { success: true, product_detail: result.data.product_detail };
+            } else {
+                throw new Error(result.message);
             }
         } else {
-            let errorMessage = "Error al crear el detalle de producto"
-            try {
-                if (res) {
-                    const errorData = await res.json()
-                    errorMessage = errorData.message || errorMessage
-                }
-            } catch (e) {
-                errorMessage = `Error ${res?.status || "Sin respuesta"}: ${res?.statusText || "Sin conexión"}`
-            }
-            throw new Error(errorMessage)
+            throw new Error(result.message || "Error al crear detalle de producto");
         }
     } catch (error) {
         return handleConnectionError(error, "createProductDetail")
@@ -276,20 +250,14 @@ export async function createProductDetail(detailData) {
 // Actualizar un detalle de producto existente
 export async function updateProductDetail(detailId, detailData) {
     try {
-        const res = await makeRequest(`http://localhost:5000/product-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/product-details/${detailId}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(detailData),
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateProductDetail");
     } catch (error) {
         return handleConnectionError(error, "updateProductDetail")
     }
@@ -298,16 +266,10 @@ export async function updateProductDetail(detailId, detailData) {
 // Eliminar un detalle de producto
 export async function deleteProductDetail(detailId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/product-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/product-details/${detailId}`, {
             method: "DELETE",
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteProductDetail");
     } catch (error) {
         return handleConnectionError(error, "deleteProductDetail")
     }
@@ -318,14 +280,8 @@ export async function deleteProductDetail(detailId) {
 // Obtener todos los materiales
 export async function getMaterials() {
     try {
-        const res = await makeRequest("http://localhost:5000/materials/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/materials/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getMaterials");
     } catch (error) {
         return handleConnectionError(error, "getMaterials")
     }
@@ -334,14 +290,8 @@ export async function getMaterials() {
 // Obtener un material por ID
 export async function getMaterialById(materialId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/materials/${materialId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/materials/${materialId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getMaterialById");
     } catch (error) {
         return handleConnectionError(error, "getMaterialById")
     }
@@ -350,35 +300,25 @@ export async function getMaterialById(materialId) {
 // Crear un nuevo material
 export async function createMaterial(materialData) {
     try {
-        const res = await makeRequest("http://localhost:5000/materials/", {
+        const result = await makeRequest("http://localhost:5000/materials/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(materialData),
         })
-
-        // Verificar si la respuesta es exitosa (status 200-299)
-        if (res && res.ok) {
-            try {
-                const data = await res.json()
-                console.log("Material creado exitosamente:", data)
-                return { success: true, material: data }
-            } catch (jsonError) {
-                console.log("Material creado pero no se pudo parsear la respuesta JSON")
-                return { success: true, message: "Material creado exitosamente" }
+        if (result.success) {
+            console.log("Material creado exitosamente:", result.data)
+            return { success: true, material: result.data }
+        } else if (result.isHttpError && result.status === 400) {
+            if (result.data && result.data.material) {
+                console.log("Material creado exitosamente (a pesar del 400 BAD REQUEST):", result.data.material);
+                return { success: true, material: result.data.material };
+            } else {
+                throw new Error(result.message);
             }
         } else {
-            let errorMessage = "Error al crear el material"
-            try {
-                if (res) {
-                    const errorData = await res.json()
-                    errorMessage = errorData.message || errorMessage
-                }
-            } catch (e) {
-                errorMessage = `Error ${res?.status || "Sin respuesta"}: ${res?.statusText || "Sin conexión"}`
-            }
-            throw new Error(errorMessage)
+            throw new Error(result.message || "Error al crear el material");
         }
     } catch (error) {
         return handleConnectionError(error, "createMaterial")
@@ -388,20 +328,14 @@ export async function createMaterial(materialData) {
 // Actualizar un material existente
 export async function updateMaterial(materialId, materialData) {
     try {
-        const res = await makeRequest(`http://localhost:5000/materials/${materialId}`, {
+        const data = await makeRequest(`http://localhost:5000/materials/${materialId}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(materialData),
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateMaterial");
     } catch (error) {
         return handleConnectionError(error, "updateMaterial")
     }
@@ -410,16 +344,10 @@ export async function updateMaterial(materialId, materialData) {
 // Eliminar un material
 export async function deleteMaterial(materialId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/materials/${materialId}`, {
+        const data = await makeRequest(`http://localhost:5000/materials/${materialId}`, {
             method: "DELETE",
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteMaterial");
     } catch (error) {
         return handleConnectionError(error, "deleteMaterial")
     }
@@ -428,14 +356,8 @@ export async function deleteMaterial(materialId) {
 // Obtener materiales por tipo
 export async function getMaterialsByType(typeId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/materials/type/${typeId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/materials/type/${typeId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getMaterialsByType");
     } catch (error) {
         return handleConnectionError(error, "getMaterialsByType")
     }
@@ -446,14 +368,8 @@ export async function getMaterialsByType(typeId) {
 // Obtener todos los detalles de materiales
 export async function getMaterialDetails() {
     try {
-        const res = await makeRequest("http://localhost:5000/material-details/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/material-details/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getMaterialDetails");
     } catch (error) {
         return handleConnectionError(error, "getMaterialDetails")
     }
@@ -462,14 +378,8 @@ export async function getMaterialDetails() {
 // Obtener un detalle de material por ID
 export async function getMaterialDetailById(detailId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/material-details/${detailId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/material-details/${detailId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getMaterialDetailById");
     } catch (error) {
         return handleConnectionError(error, "getMaterialDetailById")
     }
@@ -478,35 +388,25 @@ export async function getMaterialDetailById(detailId) {
 // Crear un nuevo detalle de material
 export async function createMaterialDetail(detailData) {
     try {
-        const res = await makeRequest("http://localhost:5000/material-details/", {
+        const result = await makeRequest("http://localhost:5000/material-details/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(detailData),
-        })
-
-        // Verificar si la respuesta es exitosa (status 200-299)
-        if (res && res.ok) {
-            try {
-                const data = await res.json()
-                console.log("Detalle de material creado exitosamente:", data)
-                return { success: true, material_detail: data }
-            } catch (jsonError) {
-                console.log("Detalle creado pero no se pudo parsear la respuesta JSON")
-                return { success: true, message: "Detalle de material creado exitosamente" }
+        });
+        if (result.success) {
+            console.log("Detalle de material creado exitosamente:", result.data.material_detail)
+            return { success: true, material_detail: result.data.material_detail }
+        } else if (result.isHttpError && result.status === 400) {
+            if (result.data && result.data.material_detail) {
+                console.log("Detalle de material creado exitosamente (a pesar del 400 BAD REQUEST):", result.data.material_detail);
+                return { success: true, material_detail: result.data.material_detail };
+            } else {
+                throw new Error(result.message);
             }
         } else {
-            let errorMessage = "Error al crear el detalle de material"
-            try {
-                if (res) {
-                    const errorData = await res.json()
-                    errorMessage = errorData.message || errorMessage
-                }
-            } catch (e) {
-                errorMessage = `Error ${res?.status || "Sin respuesta"}: ${res?.statusText || "Sin conexión"}`
-            }
-            throw new Error(errorMessage)
+            throw new Error(result.message || "Error al crear detalle de material");
         }
     } catch (error) {
         return handleConnectionError(error, "createMaterialDetail")
@@ -516,20 +416,14 @@ export async function createMaterialDetail(detailData) {
 // Actualizar un detalle de material existente
 export async function updateMaterialDetail(detailId, detailData) {
     try {
-        const res = await makeRequest(`http://localhost:5000/material-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/material-details/${detailId}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(detailData),
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateMaterialDetail");
     } catch (error) {
         return handleConnectionError(error, "updateMaterialDetail")
     }
@@ -538,16 +432,10 @@ export async function updateMaterialDetail(detailId, detailData) {
 // Eliminar un detalle de material
 export async function deleteMaterialDetail(detailId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/material-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/material-details/${detailId}`, {
             method: "DELETE",
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteMaterialDetail");
     } catch (error) {
         return handleConnectionError(error, "deleteMaterialDetail")
     }
@@ -558,14 +446,8 @@ export async function deleteMaterialDetail(detailId) {
 // Obtener todos los proveedores
 export async function getProviders() {
     try {
-        const res = await makeRequest("http://localhost:5000/providers/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/providers/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProviders");
     } catch (error) {
         return handleConnectionError(error, "getProviders")
     }
@@ -574,55 +456,36 @@ export async function getProviders() {
 // Obtener un proveedor por ID
 export async function getProviderById(providerId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/providers/${providerId}`)
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/providers/${providerId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getProviderById");
     } catch (error) {
         return handleConnectionError(error, "getProviderById")
     }
 }
 
-// Crear un nuevo proveedor - CORREGIDO
+// Crear un nuevo proveedor
 export async function createProvider(providerData) {
     try {
         console.log("Enviando datos del proveedor:", providerData)
-
-        const res = await makeRequest("http://localhost:5000/providers/", {
+        const data = await makeRequest("http://localhost:5000/providers/", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(providerData),
         })
-
-        console.log("Respuesta del servidor:", res?.status, res?.statusText)
-
-        // Verificar si la respuesta es exitosa (status 200-299)
-        if (res && res.ok) {
-            try {
-                const data = await res.json()
-                console.log("Proveedor creado exitosamente:", data)
-                return { success: true, provider: data }
-            } catch (jsonError) {
-                console.log("Proveedor creado pero no se pudo parsear la respuesta JSON")
-                return { success: true, message: "Proveedor creado exitosamente" }
+        if (data.success) {
+            console.log("Proveedor creado exitosamente:", data.data)
+            return { success: true, provider: data.data }
+        } else if (data.isHttpError && data.status === 400) {
+            if (data.data && data.data.provider) {
+                console.log("Proveedor creado exitosamente (a pesar del 400 BAD REQUEST):", data.data.provider);
+                return { success: true, provider: data.data.provider };
+            } else {
+                throw new Error(data.message);
             }
         } else {
-            let errorMessage = "Error al crear el proveedor"
-            try {
-                if (res) {
-                    const errorData = await res.json()
-                    errorMessage = errorData.message || errorMessage
-                }
-            } catch (e) {
-                errorMessage = `Error ${res?.status || "Sin respuesta"}: ${res?.statusText || "Sin conexión"}`
-            }
-            throw new Error(errorMessage)
+            throw new Error(data.message || "Error al crear el proveedor");
         }
     } catch (error) {
         return handleConnectionError(error, "createProvider")
@@ -632,20 +495,14 @@ export async function createProvider(providerData) {
 // Actualizar un proveedor existente
 export async function updateProvider(providerId, providerData) {
     try {
-        const res = await makeRequest(`http://localhost:5000/providers/${providerId}`, {
+        const data = await makeRequest(`http://localhost:5000/providers/${providerId}`, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(providerData),
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateProvider");
     } catch (error) {
         return handleConnectionError(error, "updateProvider")
     }
@@ -654,16 +511,10 @@ export async function updateProvider(providerId, providerData) {
 // Eliminar un proveedor
 export async function deleteProvider(providerId) {
     try {
-        const res = await makeRequest(`http://localhost:5000/providers/${providerId}`, {
+        const data = await makeRequest(`http://localhost:5000/providers/${providerId}`, {
             method: "DELETE",
         })
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteProvider");
     } catch (error) {
         return handleConnectionError(error, "deleteProvider")
     }
@@ -674,144 +525,95 @@ export async function deleteProvider(providerId) {
 // Obtener todos los platos
 export async function getDishes() {
     try {
-        const res = await fetch('http://localhost:5000/dishes/')
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición de los platos')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest('http://localhost:5000/dishes/')
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishes");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return []
+        return handleConnectionError(error, "getDishes")
     }
 }
 
 // Obtener un plato por ID
 export async function getDishById(dishId) {
     try {
-        const res = await fetch(`http://localhost:5000/dishes/${dishId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición del plato')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/dishes/${dishId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishById");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "getDishById")
     }
 }
 
 // Crear un nuevo plato
 export async function createDish(dishData) {
     try {
-        const res = await fetch('http://localhost:5000/dishes/', {
+        const data = await makeRequest('http://localhost:5000/dishes/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(dishData)
         })
-        if (res.status >= 200 && res.status < 300) {
-            try {
-                // Intentar parsear la respuesta como JSON
-                const data = await res.json()
-                return data
-            } catch (jsonError) {
-                console.log("Advertencia: No se pudo parsear la respuesta como JSON, pero la operación parece exitosa")
-                // Devolver un objeto genérico de éxito si no podemos parsear la respuesta
-                return { success: true, message: "Operación completada" }
+        if (data.success) {
+            return { success: true, dish: data.data }
+        } else if (data.isHttpError && data.status === 400) {
+            if (data.data && data.data.dish) {
+                console.log("Plato creado exitosamente (a pesar del 400 BAD REQUEST):", data.data.dish);
+                return { success: true, dish: data.data.dish };
+            } else {
+                throw new Error(data.message);
             }
+        } else {
+            throw new Error(data.message || "Error al crear el plato");
         }
-
-        // Si llegamos aquí, hubo un error en la respuesta
-        let errorMessage = "Ocurrió algo al crear el producto"
-        try {
-            // Intentar obtener el mensaje de error del servidor
-            const errorData = await res.json()
-            errorMessage = errorData.message || errorMessage
-        } catch (e) {
-            // Si no podemos parsear la respuesta, usar el mensaje genérico
-            console.log(e)
-        }
-
-        throw new Error(errorMessage)
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        // Verificar si el error es de tipo Bad Request pero podría ser exitoso
-        if (error.message.includes("Bad Request") || error.message.includes("400")) {
-            console.log("Advertencia: Se recibió Bad Request, pero la operación podría haber sido exitosa")
-            // Devolver un objeto que indique que podría haber sido exitoso
-            return { possiblySuccessful: true, message: "La operación podría haber sido exitosa a pesar del error" }
-        }
-        return null
+        return handleConnectionError(error, "createDish")
     }
 }
 
 // Actualizar un plato existente
 export async function updateDish(dishId, dishData) {
     try {
-        const res = await fetch(`http://localhost:5000/dishes/${dishId}`, {
+        const data = await makeRequest(`http://localhost:5000/dishes/${dishId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(dishData)
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al actualizar el plato')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateDish");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "updateDish")
     }
 }
 
 // Eliminar un plato
 export async function deleteDish(dishId) {
     try {
-        const res = await fetch(`http://localhost:5000/dishes/${dishId}`, {
+        const data = await makeRequest(`http://localhost:5000/dishes/${dishId}`, {
             method: 'DELETE'
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al eliminar el plato')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteDish");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "deleteDish")
     }
 }
 
 // Obtener platos por categoría
 export async function getDishesByCategory(categoryId) {
     try {
-        const res = await fetch(`http://localhost:5000/dishes/category/${categoryId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición de los platos por categoría')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/dishes/category/${categoryId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishesByCategory");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return []
+        return handleConnectionError(error, "getDishesByCategory")
     }
 }
 
 // Obtener platos por estado
 export async function getDishesByStatus(statusId) {
     try {
-        const res = await fetch(`http://localhost:5000/dishes/status/${statusId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición de los platos por estado')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/dishes/status/${statusId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishesByStatus");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return []
+        return handleConnectionError(error, "getDishesByStatus")
     }
 }
 
@@ -820,114 +622,75 @@ export async function getDishesByStatus(statusId) {
 // Obtener todos los detalles de platos
 export async function getDishDetails() {
     try {
-        const res = await fetch('http://localhost:5000/dish-details/')
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición de los detalles de platos')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest('http://localhost:5000/dish-details/')
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishDetails");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return []
+        return handleConnectionError(error, "getDishDetails")
     }
 }
 
 // Obtener un detalle de plato por ID
 export async function getDishDetailById(detailId) {
     try {
-        const res = await fetch(`http://localhost:5000/dish-details/${detailId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición del detalle de plato')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/dish-details/${detailId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getDishDetailById");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "getDishDetailById")
     }
 }
 
 // Crear un nuevo detalle de plato
 export async function createDishDetail(detailData) {
     try {
-        const res = await fetch('http://localhost:5000/dish-details/', {
+        const data = await makeRequest('http://localhost:5000/dish-details/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(detailData)
         })
-        if (res.status >= 200 && res.status < 300) {
-            try {
-                // Intentar parsear la respuesta como JSON
-                const data = await res.json()
-                return data
-            } catch (jsonError) {
-                console.log("Advertencia: No se pudo parsear la respuesta como JSON, pero la operación parece exitosa")
-                // Devolver un objeto genérico de éxito si no podemos parsear la respuesta
-                return { success: true, message: "Operación completada" }
+        if (data.success) {
+            return { success: true, dish_detail: data.data }
+        } else if (data.isHttpError && data.status === 400) {
+            if (data.data && data.data.dish_detail) {
+                console.log("Detalle de plato creado exitosamente (a pesar del 400 BAD REQUEST):", data.data.dish_detail);
+                return { success: true, dish_detail: data.data.dish_detail };
+            } else {
+                throw new Error(data.message);
             }
+        } else {
+            throw new Error(data.message || "Error al crear detalle de plato");
         }
-
-        // Si llegamos aquí, hubo un error en la respuesta
-        let errorMessage = "Ocurrió algo al crear el producto"
-        try {
-            // Intentar obtener el mensaje de error del servidor
-            const errorData = await res.json()
-            errorMessage = errorData.message || errorMessage
-        } catch (e) {
-            // Si no podemos parsear la respuesta, usar el mensaje genérico
-            console.log(e)
-        }
-
-        throw new Error(errorMessage)
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        // Verificar si el error es de tipo Bad Request pero podría ser exitoso
-        if (error.message.includes("Bad Request") || error.message.includes("400")) {
-            console.log("Advertencia: Se recibió Bad Request, pero la operación podría haber sido exitosa")
-            // Devolver un objeto que indique que podría haber sido exitoso
-            return { possiblySuccessful: true, message: "La operación podría haber sido exitosa a pesar del error" }
-        }
-        return null
+        return handleConnectionError(error, "createDishDetail")
     }
 }
 
 // Actualizar un detalle de plato existente
 export async function updateDishDetail(detailId, detailData) {
     try {
-        const res = await fetch(`http://localhost:5000/dish-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/dish-details/${detailId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(detailData)
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al actualizar el detalle de plato')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateDishDetail");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "updateDishDetail")
     }
 }
 
 // Eliminar un detalle de plato
 export async function deleteDishDetail(detailId) {
     try {
-        const res = await fetch(`http://localhost:5000/dish-details/${detailId}`, {
+        const data = await makeRequest(`http://localhost:5000/dish-details/${detailId}`, {
             method: 'DELETE'
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al eliminar el detalle de plato')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteDishDetail");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "deleteDishDetail")
     }
 }
 
@@ -936,14 +699,8 @@ export async function deleteDishDetail(detailId) {
 // Obtener todas las categorías
 export async function getCategories() {
     try {
-        const res = await makeRequest("http://localhost:5000/categories/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/categories/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getCategories");
     } catch (error) {
         return handleConnectionError(error, "getCategories")
     }
@@ -952,98 +709,65 @@ export async function getCategories() {
 // Obtener una categoría por ID
 export async function getCategoryById(categoryId) {
     try {
-        const res = await fetch(`http://localhost:5000/categories/${categoryId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición de la categoría')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/categories/${categoryId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getCategoryById");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "getCategoryById")
     }
 }
 
 // Crear una nueva categoría
 export async function createCategory(categoryData) {
     try {
-        const res = await fetch('http://localhost:5000/categories/', {
+        const data = await makeRequest('http://localhost:5000/categories/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(categoryData)
         })
-        if (res.status >= 200 && res.status < 300) {
-            try {
-                // Intentar parsear la respuesta como JSON
-                const data = await res.json()
-                return data
-            } catch (jsonError) {
-                console.log("Advertencia: No se pudo parsear la respuesta como JSON, pero la operación parece exitosa")
-                // Devolver un objeto genérico de éxito si no podemos parsear la respuesta
-                return { success: true, message: "Operación completada" }
+        if (data.success) {
+            return { success: true, category: data.data }
+        } else if (data.isHttpError && data.status === 400) {
+            if (data.data && data.data.category) {
+                console.log("Categoría creada exitosamente (a pesar del 400 BAD REQUEST):", data.data.category);
+                return { success: true, category: data.data.category };
+            } else {
+                throw new Error(data.message);
             }
+        } else {
+            throw new Error(data.message || "Error al crear la categoría");
         }
-
-        // Si llegamos aquí, hubo un error en la respuesta
-        let errorMessage = "Ocurrió algo al crear el producto"
-        try {
-            // Intentar obtener el mensaje de error del servidor
-            const errorData = await res.json()
-            errorMessage = errorData.message || errorMessage
-        } catch (e) {
-            console.log(e)
-        }
-
-        throw new Error(errorMessage)
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        // Verificar si el error es de tipo Bad Request pero podría ser exitoso
-        if (error.message.includes("Bad Request") || error.message.includes("400")) {
-            console.log("Advertencia: Se recibió Bad Request, pero la operación podría haber sido exitosa")
-            // Devolver un objeto que indique que podría haber sido exitoso
-            return { possiblySuccessful: true, message: "La operación podría haber sido exitosa a pesar del error" }
-        }
-        return null
+        return handleConnectionError(error, "createCategory")
     }
 }
 
 // Actualizar una categoría existente
 export async function updateCategory(categoryId, categoryData) {
     try {
-        const res = await fetch(`http://localhost:5000/categories/${categoryId}`, {
+        const data = await makeRequest(`http://localhost:5000/categories/${categoryId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(categoryData)
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al actualizar la categoría')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateCategory");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "updateCategory")
     }
 }
 
 // Eliminar una categoría
 export async function deleteCategory(categoryId) {
     try {
-        const res = await fetch(`http://localhost:5000/categories/${categoryId}`, {
+        const data = await makeRequest(`http://localhost:5000/categories/${categoryId}`, {
             method: 'DELETE'
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al eliminar la categoría')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteCategory");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "deleteCategory")
     }
 }
 
@@ -1052,115 +776,74 @@ export async function deleteCategory(categoryId) {
 // Obtener todos los estados
 export async function getStatuses() {
     try {
-        const res = await makeRequest("http://localhost:5000/status/")
-
-        if (!res || !res.ok) {
-            throw new Error(`Error HTTP: ${res?.status || "Sin respuesta"} - ${res?.statusText || "Sin conexión"}`)
-        }
-
-        const data = await res.json()
-        return data
+        const data = await makeRequest("http://localhost:5000/status/")
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getStatuses");
     } catch (error) {
         return handleConnectionError(error, "getStatuses")
     }
 }
 
-
 // Obtener un estado por ID
 export async function getStatusById(statusId) {
     try {
-        const res = await fetch(`http://localhost:5000/status/${statusId}`)
-        if (!res.ok) {
-            throw new Error('Ocurrió algo con la petición del estado')
-        }
-        const data = await res.json()
-        return data
+        const data = await makeRequest(`http://localhost:5000/status/${statusId}`)
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "getStatusById");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "getStatusById")
     }
 }
 
 // Crear un nuevo estado
 export async function createStatus(statusData) {
     try {
-        const res = await fetch('http://localhost:5000/status/', {
+        const data = await makeRequest('http://localhost:5000/status/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(statusData)
         })
-        if (res.status >= 200 && res.status < 300) {
-            try {
-                // Intentar parsear la respuesta como JSON
-                const data = await res.json()
-                return data
-            } catch (jsonError) {
-                console.log("Advertencia: No se pudo parsear la respuesta como JSON, pero la operación parece exitosa")
-                // Devolver un objeto genérico de éxito si no podemos parsear la respuesta
-                return { success: true, message: "Operación completada" }
+        if (data.success) {
+            return { success: true, status: data.data }
+        } else if (data.isHttpError && data.status === 400) {
+            if (data.data && data.data.status) {
+                console.log("Estado creado exitosamente (a pesar del 400 BAD REQUEST):", data.data.status);
+                return { success: true, status: data.data.status };
+            } else {
+                throw new Error(data.message);
             }
+        } else {
+            throw new Error(data.message || "Error al crear el estado");
         }
-
-        // Si llegamos aquí, hubo un error en la respuesta
-        let errorMessage = "Ocurrió algo al crear el producto"
-        try {
-            // Intentar obtener el mensaje de error del servidor
-            const errorData = await res.json()
-            errorMessage = errorData.message || errorMessage
-        } catch (e) {
-            console.log(e)
-            // Si no podemos parsear la respuesta, usar el mensaje genérico
-        }
-
-        throw new Error(errorMessage)
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        // Verificar si el error es de tipo Bad Request pero podría ser exitoso
-        if (error.message.includes("Bad Request") || error.message.includes("400")) {
-            console.log("Advertencia: Se recibió Bad Request, pero la operación podría haber sido exitosa")
-            // Devolver un objeto que indique que podría haber sido exitoso
-            return { possiblySuccessful: true, message: "La operación podría haber sido exitosa a pesar del error" }
-        }
-        return null
+        return handleConnectionError(error, "createStatus")
     }
 }
 
 // Actualizar un estado existente
 export async function updateStatus(statusId, statusData) {
     try {
-        const res = await fetch(`http://localhost:5000/status/${statusId}`, {
+        const data = await makeRequest(`http://localhost:5000/status/${statusId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(statusData)
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al actualizar el estado')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "updateStatus");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "updateStatus")
     }
 }
 
 // Eliminar un estado
 export async function deleteStatus(statusId) {
     try {
-        const res = await fetch(`http://localhost:5000/status/${statusId}`, {
+        const data = await makeRequest(`http://localhost:5000/status/${statusId}`, {
             method: 'DELETE'
         })
-        if (!res.ok) {
-            throw new Error('Ocurrió algo al eliminar el estado')
-        }
-        const data = await res.json()
-        return data
+        return data.success ? data.data : handleConnectionError(data.error || new Error(data.message), "deleteStatus");
     } catch (error) {
-        console.log("Ocurrió algo: ", error)
-        return null
+        return handleConnectionError(error, "deleteStatus")
     }
 }

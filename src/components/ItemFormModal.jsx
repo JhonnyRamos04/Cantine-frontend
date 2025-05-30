@@ -15,6 +15,9 @@ import {
     createProductDetail,
     updateProductDetail,
     createMaterialDetail,
+    updateMaterialDetail, // Importar la función para actualizar detalles de material
+    getMaterialDetailById,
+    getProductDetailById, // Importar para obtener detalles de material
 } from "../utils/db"
 
 export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType }) {
@@ -28,7 +31,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
         phone: "",
         type_id: "",
         status_id: "",
-        provided_id: "",
+        provided_id: "", // Asegurarse de que este campo exista
     })
 
     const [categories, setCategories] = useState([])
@@ -48,6 +51,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                     setProviders(providersData || [])
                 } catch (error) {
                     console.error("Error cargando proveedores:", error)
+                    toast.error("Error al cargar proveedores.", { position: "top-right" })
                 } finally {
                     setLoadingProviders(false)
                 }
@@ -57,7 +61,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
         loadProviders()
     }, [isOpen, itemType])
 
-    // Cargar datos necesarios al abrir el modal
+    // Cargar categorías y estados al abrir el modal
     useEffect(() => {
         const loadData = async () => {
             if (isOpen) {
@@ -76,6 +80,7 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                     }
                 } catch (error) {
                     console.error("Error cargando datos:", error)
+                    toast.error("Error al cargar datos adicionales.", { position: "top-right" })
                 } finally {
                     setLoading(false)
                 }
@@ -85,63 +90,87 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
         loadData()
     }, [isOpen, itemType])
 
-    // Resetear el formulario cuando cambia el item o se abre/cierra el modal
+    // Resetear el formulario y cargar datos del item para edición
     useEffect(() => {
-        if (isOpen && mode === "edit" && item) {
-            console.log("Editando item:", item)
+        const initializeFormData = async () => {
+            if (isOpen && mode === "edit" && item) {
+                console.log("Editando item:", item)
 
-            switch (itemType) {
-                case "productos": {
-                    setFormData({
-                        name: item.name || "",
-                        description: item.product_detail?.description || "",
-                        category_id: item.category_id || "",
-                        price: item.product_detail?.price || "",
-                        quantity: item.product_detail?.quantity || "",
-                        provided_id: item.product_detail?.provider?.provider_id || "",
-                    })
-                    console.log("Proveedor seleccionado:", item.product_detail?.provider?.provider_id)
-                    break
+                let detailData = {}
+                if (itemType === "productos" && item.products_details_id) {
+                    // Si es un producto, intentar obtener sus detalles
+                    const productDetail = await getProductDetailById(item.products_details_id)
+                    if (productDetail) {
+                        detailData = {
+                            description: productDetail.description || "",
+                            quantity: productDetail.quantity || "",
+                            price: productDetail.price || "",
+                            provided_id: productDetail.provided_id || productDetail.provider?.provider_id || "",
+                        }
+                    }
+                } else if (itemType === "materiales" && item.materials_details_id) {
+                    // Si es un material, intentar obtener sus detalles
+                    const materialDetail = await getMaterialDetailById(item.materials_details_id)
+                    if (materialDetail) {
+                        detailData = {
+                            description: materialDetail.description || "",
+                            quantity: materialDetail.quantity || "",
+                            price: materialDetail.price || "",
+                            provided_id: materialDetail.provided_id || materialDetail.provider?.provider_id || "",
+                        }
+                    }
                 }
-                case "materiales": {
-                    setFormData({
-                        name: item.name || "",
-                        type_id: item.type_id || "",
-                        type_name: item.type_name || "",
-                        materials_id: item.materials_id || "",
-                        materials_details_id: item.materials_details_id || "",
-                    })
-                    break
+
+                switch (itemType) {
+                    case "productos": {
+                        setFormData({
+                            name: item.name || "",
+                            category_id: item.category_id || "",
+                            ...detailData, // Incluir los detalles del producto
+                        })
+                        console.log("Proveedor seleccionado:", detailData.provided_id)
+                        break
+                    }
+                    case "materiales": {
+                        setFormData({
+                            name: item.name || "",
+                            type_id: item.type_id || "",
+                            ...detailData, // Incluir los detalles del material
+                        })
+                        console.log("Proveedor seleccionado:", detailData.provided_id)
+                        break
+                    }
+                    case "proveedores": {
+                        setFormData({
+                            name: item.name || "",
+                            direction: item.direction || "",
+                            phone: item.phone || "",
+                        })
+                        break
+                    }
+                    default: {
+                        setFormData({
+                            name: item.name || "",
+                        })
+                    }
                 }
-                case "proveedores": {
-                    setFormData({
-                        name: item.name || "",
-                        direction: item.direction || "",
-                        phone: item.phone || "",
-                    })
-                    break
-                }
-                default: {
-                    setFormData({
-                        name: item.name || "",
-                    })
-                }
+            } else if (isOpen && mode === "add") {
+                // Resetear formulario para añadir nuevo elemento
+                setFormData({
+                    name: "",
+                    description: "",
+                    category_id: "",
+                    price: "",
+                    quantity: "",
+                    direction: "",
+                    phone: "",
+                    type_id: "",
+                    status_id: "",
+                    provided_id: "",
+                })
             }
-        } else if (isOpen && mode === "add") {
-            // Resetear formulario para añadir nuevo elemento
-            setFormData({
-                name: "",
-                description: "",
-                category_id: "",
-                price: "",
-                quantity: "",
-                direction: "",
-                phone: "",
-                type_id: "",
-                status_id: "",
-                provided_id: "",
-            })
         }
+        initializeFormData()
     }, [isOpen, item, mode, itemType])
 
     const handleChange = (e) => {
@@ -182,6 +211,8 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                             }
 
                             result = await createProduct(productData)
+                        } else {
+                            throw new Error("No se pudo crear el detalle del producto.")
                         }
                         break
                     }
@@ -205,6 +236,8 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                             }
 
                             result = await createMaterial(materialData)
+                        } else {
+                            throw new Error("No se pudo crear el detalle del material.")
                         }
                         break
                     }
@@ -218,6 +251,8 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         result = await createProvider(providerData)
                         break
                     }
+                    default:
+                        throw new Error("Tipo de item no reconocido para añadir.")
                 }
             } else if (mode === "edit") {
                 switch (itemType) {
@@ -229,16 +264,14 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         }
 
                         // Si hay un detalle de producto, actualizarlo también
-                        if (item.product_detail) {
+                        if (item.products_details_id) { // Usar products_details_id del item original
                             const productDetailData = {
                                 description: formData.description,
                                 quantity: Number.parseInt(formData.quantity) || 0,
                                 price: Number.parseFloat(formData.price) || 0,
                                 provided_id: formData.provided_id,
                             }
-
-                            // Actualizar el detalle del producto
-                            await updateProductDetail(item.product_detail.products_details_id, productDetailData)
+                            await updateProductDetail(item.products_details_id, productDetailData)
                         }
 
                         result = await updateProduct(item.products_id, productData)
@@ -249,6 +282,17 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         const materialData = {
                             name: formData.name,
                             type_id: Number.parseInt(formData.type_id) || 1,
+                        }
+
+                        // Si hay un detalle de material, actualizarlo también
+                        if (item.materials_details_id) { // Usar materials_details_id del item original
+                            const materialDetailData = {
+                                description: formData.description,
+                                quantity: Number.parseInt(formData.quantity) || 0,
+                                price: Number.parseFloat(formData.price) || 0,
+                                provided_id: formData.provided_id,
+                            }
+                            await updateMaterialDetail(item.materials_details_id, materialDetailData)
                         }
 
                         result = await updateMaterial(item.materials_id, materialData)
@@ -264,6 +308,8 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
                         result = await updateProvider(item.provider_id, providerData)
                         break
                     }
+                    default:
+                        throw new Error("Tipo de item no reconocido para editar.")
                 }
             }
 
@@ -275,14 +321,13 @@ export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType })
             const safeItemTypeName = getItemTypeName()
 
             toast.success(`${mode === "add" ? "Añadido" : "Editado"} ${safeItemTypeName} exitosamente`, {
-                position: toast.POSITION.TOP_RIGHT,
+                position: "top-right",
             })
         } catch (error) {
             console.error("Error al guardar:", error)
-            toast.error("Error al guardar el item", {
-                position: toast.POSITION.TOP_RIGHT,
+            toast.error(`Error al guardar el ${getItemTypeName()}: ${error.message}`, {
+                position: "top-right",
             })
-            // Aquí podrías mostrar un mensaje de error al usuario
         } finally {
             setLoading(false)
         }

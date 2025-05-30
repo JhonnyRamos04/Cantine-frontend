@@ -9,6 +9,8 @@ import {
     createProductDetail,
     getProductDetailById,
     getCategories,
+    updateProduct,
+    updateProductDetail, // Importación añadida
 } from "../../utils/db"
 import { useToast } from "../ui/toast-container"
 import { ConfirmationDialog } from "../ui/ConfirmationDialog"
@@ -162,7 +164,7 @@ function ProductCard({ product, onAddToCart }) {
             {/* Imagen del producto */}
             <div className="aspect-w-16 aspect-h-12 bg-gray-200 relative">
                 <img
-                    src={`/placeholder.svg?height=200&width=300&text=${encodeURIComponent(product.name)}`}
+                    src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(product.name)}`}
                     alt={product.name}
                     className="w-full h-48 object-cover"
                 />
@@ -231,7 +233,7 @@ function ProductListItem({ product, onAddToCart }) {
                 {/* Imagen */}
                 <div className="flex-shrink-0">
                     <img
-                        src={`/placeholder.svg?height=120&width=120&text=${encodeURIComponent(product.name)}`}
+                        src={`https://placehold.co/120x120/cccccc/000000?text=${encodeURIComponent(product.name)}`}
                         alt={product.name}
                         className="w-24 h-24 object-cover rounded-lg"
                     />
@@ -262,8 +264,8 @@ function ProductListItem({ product, onAddToCart }) {
                                 onClick={() => onAddToCart(product)}
                                 disabled={!isAvailable}
                                 className={`py-2 px-4 rounded-lg font-medium transition-colors ${isAvailable
-                                        ? "bg-green-500 hover:bg-green-600 text-white"
-                                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                    ? "bg-green-500 hover:bg-green-600 text-white"
+                                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
                                     }`}
                             >
                                 {isAvailable ? (
@@ -397,14 +399,19 @@ export function Product({ user }) {
                     try {
                         const detailData = await getProductDetailById(product.products_details_id)
                         if (detailData && !detailData.isConnectionError) {
-                            product.detail = detailData
+                            // Combina los datos del producto con sus detalles
+                            setEditingItem({ ...product, product_detail: detailData })
+                        } else {
+                            setEditingItem(product); // Si no se pueden obtener detalles, usa el producto original
                         }
                     } catch (detailError) {
                         console.error("Error obteniendo detalles del producto:", detailError)
+                        setEditingItem(product); // En caso de error, usa el producto original
                     }
+                } else {
+                    setEditingItem(product); // Si no hay products_details_id, usa el producto original
                 }
 
-                setEditingItem(product)
                 setModalMode("edit")
                 setIsModalOpen(true)
             } else {
@@ -462,6 +469,7 @@ export function Product({ user }) {
 
         try {
             setLoading(true)
+            let result;
 
             if (mode === "add") {
                 const productDetailData = {
@@ -471,21 +479,15 @@ export function Product({ user }) {
                     provided_id: formData.provided_id || null,
                 }
 
-                console.log("Creando detalle de producto:", productDetailData)
-                const detailResult = await createProductDetail(productDetailData)
-
-                if (detailResult && detailResult.isConnectionError) {
-                    showError("Sin conexión", "No se puede crear el producto sin conexión al servidor")
-                    return
-                }
+                console.log("Creando detalle de producto con datos:", productDetailData);
+                const detailResult = await createProductDetail(productDetailData);
 
                 if (detailResult && detailResult.success) {
-                    let products_details_id = null
+                    console.log("Respuesta de createProductDetail:", detailResult.product_detail); // Log para depuración
+                    let products_details_id = null;
 
-                    if (detailResult.product_detail && detailResult.product_detail.products_details_id) {
-                        products_details_id = detailResult.product_detail.products_details_id
-                    } else if (detailResult.product_detail && detailResult.product_detail.id) {
-                        products_details_id = detailResult.product_detail.id
+                    if (detailResult.product_detail) {
+                        products_details_id = detailResult.product_detail.products_details_id || detailResult.product_detail.id;
                     }
 
                     if (products_details_id) {
@@ -495,35 +497,63 @@ export function Product({ user }) {
                             products_details_id: products_details_id,
                         }
 
-                        console.log("Creando producto:", productData)
-                        const result = await createProduct(productData)
+                        console.log("Creando producto con datos:", productData);
+                        result = await createProduct(productData);
 
                         if (result && result.isConnectionError) {
-                            showError("Sin conexión", "No se puede crear el producto sin conexión al servidor")
+                            showError("Sin conexión", "No se puede crear el producto sin conexión al servidor");
                         } else if (result && result.success) {
-                            await loadProducts()
-                            showSuccess("Éxito", "Producto creado correctamente")
+                            await loadProducts();
+                            showSuccess("Éxito", "Producto creado correctamente");
                         } else {
-                            throw new Error("No se pudo crear el producto")
+                            throw new Error("No se pudo crear el producto");
                         }
                     } else {
-                        throw new Error("No se pudo obtener el ID del detalle del producto")
+                        throw new Error("No se pudo obtener el ID del detalle del producto. Respuesta del detalle: " + JSON.stringify(detailResult.product_detail));
                     }
                 } else {
-                    throw new Error("No se pudo crear el detalle del producto")
+                    throw new Error("No se pudo crear el detalle del producto");
                 }
             } else if (mode === "edit" && editingItem) {
-                console.log("Editando producto:", editingItem)
-                showSuccess("Éxito", "Producto actualizado correctamente")
+                // Lógica de actualización para productos
+                const productData = {
+                    name: formData.name,
+                    category_id: formData.category_id || null,
+                };
+
+                // Si hay un detalle de producto asociado, actualizarlo también
+                if (editingItem.products_details_id) {
+                    const productDetailData = {
+                        description: formData.description || "",
+                        quantity: Number.parseInt(formData.quantity) || 0,
+                        price: Number.parseFloat(formData.price) || 0,
+                        provided_id: formData.provided_id || null,
+                    };
+                    console.log("Actualizando detalle de producto con ID:", editingItem.products_details_id, "y datos:", productDetailData);
+                    await updateProductDetail(editingItem.products_details_id, productDetailData);
+                }
+
+                console.log("Actualizando producto con ID:", editingItem.products_id, "y datos:", productData);
+                result = await updateProduct(editingItem.products_id, productData);
+
+                if (result && result.isConnectionError) {
+                    showError("Sin conexión", "No se puede actualizar el producto sin conexión al servidor");
+                } else if (result) {
+                    await loadProducts();
+                    showSuccess("Éxito", "Producto actualizado correctamente");
+                } else {
+                    throw new Error("No se pudo actualizar el producto");
+                }
             }
         } catch (error) {
-            console.error("Error guardando producto:", error)
-            showError("Error", `Error al guardar el producto: ${error.message}`)
+            console.error("Error guardando producto:", error);
+            showError("Error", `Error al guardar el producto: ${error.message}`);
         } finally {
-            setLoading(false)
-            setIsModalOpen(false)
+            setLoading(false);
+            setIsModalOpen(false);
         }
-    }
+    };
+
 
     // Filtrar productos según el término de búsqueda (solo para vista admin)
     const filteredProducts = products.filter((product) => product.name.toLowerCase().includes(searchTerm.toLowerCase()))

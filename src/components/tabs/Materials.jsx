@@ -98,14 +98,18 @@ export function Materials() {
                         const detailData = await getMaterialDetailById(material.materials_details_id)
                         if (detailData && !detailData.isConnectionError) {
                             // Combinar los datos del material con sus detalles
-                            material.detail = detailData
+                            setEditingItem({ ...material, material_detail: detailData })
+                        } else {
+                            setEditingItem(material); // Si no se pueden obtener detalles, usa el material original
                         }
                     } catch (detailError) {
                         console.error("Error obteniendo detalles del material:", detailError)
+                        setEditingItem(material); // En caso de error, usa el material original
                     }
+                } else {
+                    setEditingItem(material); // Si no hay materials_details_id, usa el material original
                 }
 
-                setEditingItem(material)
                 setModalMode("edit")
                 setIsModalOpen(true)
             } else {
@@ -157,6 +161,7 @@ export function Materials() {
 
         try {
             setLoading(true)
+            let result;
 
             if (mode === "add") {
                 // Primero crear el detalle del material
@@ -167,22 +172,20 @@ export function Materials() {
                     provided_id: formData.provided_id || null,
                 }
 
-                console.log("Creando detalle de material:", materialDetailData)
-                const detailResult = await createMaterialDetail(materialDetailData)
+                console.log("Creando detalle de material con datos:", materialDetailData);
+                const detailResult = await createMaterialDetail(materialDetailData);
 
                 if (detailResult && detailResult.isConnectionError) {
-                    showError("Sin conexión", "No se puede crear el material sin conexión al servidor")
-                    return
+                    showError("Sin conexión", "No se puede crear el material sin conexión al servidor");
+                    return;
                 }
 
                 if (detailResult && detailResult.success) {
-                    // Extraer el ID del detalle
-                    let materials_details_id = null
+                    console.log("Respuesta de createMaterialDetail:", detailResult.material_detail); // Log para depuración
+                    let materials_details_id = null;
 
-                    if (detailResult.material_detail && detailResult.material_detail.materials_details_id) {
-                        materials_details_id = detailResult.material_detail.materials_details_id
-                    } else if (detailResult.material_detail && detailResult.material_detail.id) {
-                        materials_details_id = detailResult.material_detail.id
+                    if (detailResult.material_detail) {
+                        materials_details_id = detailResult.material_detail.materials_details_id || detailResult.material_detail.id;
                     }
 
                     if (materials_details_id) {
@@ -193,93 +196,91 @@ export function Materials() {
                             materials_details_id: materials_details_id,
                         }
 
-                        console.log("Creando material:", materialData)
-                        const result = await createMaterial(materialData)
+                        console.log("Creando material con datos:", materialData);
+                        result = await createMaterial(materialData);
 
                         if (result && result.isConnectionError) {
-                            showError("Sin conexión", "No se puede crear el material sin conexión al servidor")
+                            showError("Sin conexión", "No se puede crear el material sin conexión al servidor");
                         } else if (result && result.success) {
-                            await loadMaterials()
-                            showSuccess("Éxito", "Material creado correctamente")
+                            await loadMaterials();
+                            showSuccess("Éxito", "Material creado correctamente");
                         } else {
-                            throw new Error("No se pudo crear el material")
+                            throw new Error("No se pudo crear el material");
                         }
                     } else {
-                        throw new Error("No se pudo obtener el ID del detalle del material")
+                        throw new Error("No se pudo obtener el ID del detalle del material. Respuesta del detalle: " + JSON.stringify(detailResult.material_detail));
                     }
                 } else {
-                    throw new Error("No se pudo crear el detalle del material")
+                    throw new Error("No se pudo crear el detalle del material");
                 }
             } else if (mode === "edit" && editingItem) {
                 // Actualizar el material - solo enviamos los campos que el backend espera
                 const materialData = {
                     name: formData.name,
-                }
+                };
 
                 // Solo incluir type_id si existe
                 if (formData.type_id) {
-                    materialData.type_id = Number.parseInt(formData.type_id) || 1
+                    materialData.type_id = Number.parseInt(formData.type_id) || 1;
                 }
 
-                console.log("Actualizando material:", materialData)
-                console.log("ID del material:", editingItem.materials_id)
+                console.log("Actualizando material con ID:", editingItem.materials_id, "y datos:", materialData);
 
                 // Actualizar el material
-                const result = await updateMaterial(editingItem.materials_id, materialData)
+                result = await updateMaterial(editingItem.materials_id, materialData);
 
                 if (result && result.isConnectionError) {
-                    showError("Sin conexión", "No se puede actualizar el material sin conexión al servidor")
-                    return
+                    showError("Sin conexión", "No se puede actualizar el material sin conexión al servidor");
+                    return;
                 }
 
                 // Si hay un detalle de material, actualizarlo también
                 if (editingItem.materials_details_id) {
                     // Solo incluir los campos que el backend espera
-                    const materialDetailData = {}
+                    const materialDetailData = {};
 
                     if (formData.description !== undefined) {
-                        materialDetailData.description = formData.description
+                        materialDetailData.description = formData.description;
                     }
 
                     if (formData.quantity !== undefined) {
-                        materialDetailData.quantity = Number.parseInt(formData.quantity) || 0
+                        materialDetailData.quantity = Number.parseInt(formData.quantity) || 0;
                     }
 
                     if (formData.price !== undefined) {
-                        materialDetailData.price = Number.parseFloat(formData.price) || 0
+                        materialDetailData.price = Number.parseFloat(formData.price) || 0;
                     }
 
                     if (formData.provided_id) {
-                        materialDetailData.provided_id = formData.provided_id
+                        materialDetailData.provided_id = formData.provided_id;
                     }
 
-                    console.log("Actualizando detalle de material:", materialDetailData)
-                    console.log("ID del detalle:", editingItem.materials_details_id)
+                    console.log("Actualizando detalle de material con ID:", editingItem.materials_details_id, "y datos:", materialDetailData);
 
                     try {
-                        const detailResult = await updateMaterialDetail(editingItem.materials_details_id, materialDetailData)
+                        const detailResult = await updateMaterialDetail(editingItem.materials_details_id, materialDetailData);
                         if (detailResult && detailResult.isConnectionError) {
-                            showWarning("Sin conexión", "No se puede actualizar el detalle del material sin conexión al servidor")
+                            showWarning("Sin conexión", "No se puede actualizar el detalle del material sin conexión al servidor");
                         }
-                        console.log("Resultado de actualización de detalle:", detailResult)
+                        console.log("Resultado de actualización de detalle:", detailResult);
                     } catch (detailError) {
-                        console.error("Error actualizando detalle del material:", detailError)
-                        showWarning("Advertencia", `Error al actualizar el detalle del material: ${detailError.message}`)
+                        console.error("Error actualizando detalle del material:", detailError);
+                        showWarning("Advertencia", `Error al actualizar el detalle del material: ${detailError.message}`);
                         // Continuar a pesar del error en el detalle
                     }
                 }
 
-                await loadMaterials()
-                showSuccess("Éxito", "Material actualizado correctamente")
+                await loadMaterials();
+                showSuccess("Éxito", "Material actualizado correctamente");
             }
         } catch (error) {
-            console.error("Error guardando material:", error)
-            showError("Error", `Error al guardar el material: ${error.message}`)
+            console.error("Error guardando material:", error);
+            showError("Error", `Error al guardar el material: ${error.message}`);
         } finally {
-            setLoading(false)
-            setIsModalOpen(false)
+            setLoading(false);
+            setIsModalOpen(false);
         }
-    }
+    };
 
     const filteredMaterials = materials.filter((material) =>
         material.name.toLowerCase().includes(searchTerm.toLowerCase()),
