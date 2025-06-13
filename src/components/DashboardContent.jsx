@@ -26,7 +26,7 @@ export function DashboardContent({ activeCategory, user }) {
 
             {/* Contenido según la categoría activa */}
             {activeCategory === "perfil" && <Profile user={user} />}
-            {activeCategory === "productos" && <Product user={user} />}
+            {activeCategory === "productos" && user?.role === "admin" && <Product user={user} />}
             {activeCategory === "materiales" && user?.role === "admin" && <Materials />}
             {activeCategory === "provedores" && user?.role === "admin" && <Providers />}
             {activeCategory === "platos" && <Dishes user={user} />}

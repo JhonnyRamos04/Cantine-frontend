@@ -22,8 +22,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
             // Para clientes, mostrar menú de ecommerce
             return [
                 ...baseItems,
-                { id: "productos", label: "Nuestros Platos", icon: <ChefHat size={16} /> },
-                { id: "platos", label: "Mis Órdenes", icon: <ShoppingCart size={16} /> },
+                { id: "platos", label: "Pedir", icon: <ShoppingCart size={16} /> },
             ]
         }
     }
