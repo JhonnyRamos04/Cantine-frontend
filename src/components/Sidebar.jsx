@@ -9,7 +9,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
     const getMenuItems = () => {
         const baseItems = [{ id: "perfil", label: "Perfil", icon: <ChefHat size={16} /> }]
 
-        if (user?.role === "admin") {
+        if (user?.role.name === "admin") {
             return [
                 ...baseItems,
                 { id: "productos", label: "Productos", icon: <Package size={16} /> },
@@ -86,7 +86,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${user?.role === "admin" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"
                                     }`}
                             >
-                                {user?.role === "admin" ? "Administrador" : "Cliente"}
+                                {user?.role.name === "admin" ? "Administrador" : "Cliente"}
                             </span>
                         </div>
                     </div>
@@ -136,7 +136,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
 
                 {/* Footer */}
                 <div className={`p-4 text-sm text-gray-500 border-t ${collapsed ? "md:hidden" : ""}`}>
-                    <p>Cantine v1.5</p>
+                    <p>Cantine v2.0</p>
                 </div>
             </aside>
         </>

@@ -28,13 +28,14 @@ export default function App() {
 
   // Función para manejar el login exitoso
   const handleLoginSuccess = (userData) => {
+    console.log(userData)
     setUser(userData)
     setIsAuthenticated(true)
     // Guardar en localStorage para persistir la sesión
     localStorage.setItem("cantine_user", JSON.stringify(userData))
 
     // Establecer categoría inicial según el rol
-    if (userData.role === "admin") {
+    if (userData.role.name === "admin") {
       setActiveCategory("productos")
     } else {
       setActiveCategory("perfil")

@@ -20,21 +20,21 @@ export function DashboardContent({ activeCategory, user }) {
                     {activeCategory === "ventas" && "Reporte de Ventas"}
                 </h1>
                 <p className="text-gray-600">
-                    Bienvenido, {user?.name} ({user?.role === "admin" ? "Administrador" : "Cliente"})
+                    Bienvenido, {user?.name} ({user?.role.name === "admin" ? "Administrador" : "Cliente"})
                 </p>
             </div>
 
             {/* Contenido según la categoría activa */}
             {activeCategory === "perfil" && <Profile user={user} />}
-            {activeCategory === "productos" && user?.role === "admin" && <Product user={user} />}
-            {activeCategory === "materiales" && user?.role === "admin" && <Materials />}
-            {activeCategory === "provedores" && user?.role === "admin" && <Providers />}
+            {activeCategory === "productos" && user?.role.name === "admin" && <Product user={user} />}
+            {activeCategory === "materiales" && user?.role.name === "admin" && <Materials />}
+            {activeCategory === "provedores" && user?.role.name === "admin" && <Providers />}
             {activeCategory === "platos" && <Dishes user={user} />}
-            {activeCategory === "ventas" && user?.role === "admin" && <Sales />}
+            {activeCategory === "ventas" && user?.role.name === "admin" && <Sales />}
 
             {/* Mensaje para clientes que intentan acceder a secciones de admin */}
             {(activeCategory === "materiales" || activeCategory === "provedores" || activeCategory === "ventas") &&
-                user?.role === "client" && (
+                user?.role.name === "client" && (
                     <div className="text-center py-12">
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 max-w-md mx-auto">
                             <h3 className="text-lg font-medium text-yellow-800 mb-2">Acceso Restringido</h3>

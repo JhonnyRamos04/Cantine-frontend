@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import {
     Clock,
@@ -435,13 +433,30 @@ export function Dishes({ user }) {
 
     const { showSuccess, showError, showWarning } = useToast()
 
+    // --- HOOKS DE EFECTO CORREGIDOS ---
     useEffect(() => {
-        loadDishes()
-        loadOrders()
-        loadStatuses()
-        loadProducts()
-        loadCategories()
-    }, [])
+        // Carga inicial de datos base que no tienen dependencias entre sí
+        const loadBaseData = async () => {
+            setIsRetrying(true); // Usamos isRetrying para mostrar un spinner en el botón de reintentar
+            await Promise.all([
+                loadDishes(),
+                loadStatuses(),
+                loadProducts(),
+                loadCategories()
+            ]);
+            setIsRetrying(false);
+        };
+        loadBaseData();
+    }, []);
+
+    useEffect(() => {
+        // Carga las órdenes solo cuando sus dependencias (platos y estados) están listas.
+        // Esto previene la condición de carrera (race condition).
+        if (Object.keys(statusMap).length > 0 && availableDishes.length > 0) {
+            loadOrders();
+        }
+    }, [statusMap, availableDishes]); // Dependencias del efecto
+    // --- FIN DE LA CORRECCIÓN DE HOOKS ---
 
     const loadStatuses = async () => {
         try {
@@ -516,6 +531,7 @@ export function Dishes({ user }) {
         }
     }
 
+    // --- FUNCIÓN loadOrders CORREGIDA ---
     const loadOrders = async () => {
         setLoading(true)
         setError(null)
@@ -536,8 +552,10 @@ export function Dishes({ user }) {
                         // Buscar información del plato
                         const dish = availableDishes.find((d) => d.dishes_id === order.dishes_id) || {}
 
-                        // El estado ahora viene directamente de la orden
-                        const statusName = order.status || "pendiente"
+                        // **LA CORRECCIÓN CLAVE ESTÁ AQUÍ**
+                        // Usamos el `statusMap` para obtener el nombre del estado a partir del `status_id`.
+                        // Si no se encuentra, se asigna 'pendiente' por defecto.
+                        const statusName = statusMap[order.status_id] || "pendiente"
 
                         return {
                             id: order.order_id,
@@ -545,7 +563,7 @@ export function Dishes({ user }) {
                             dishes_id: order.dishes_id,
                             user_id: order.user_id,
                             name: dish.name || "Plato desconocido",
-                            status: statusName,
+                            status: statusName, // Usamos el estado resuelto
                             time: new Date(order.created_at || Date.now()).toLocaleTimeString("es-ES", {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -575,11 +593,14 @@ export function Dishes({ user }) {
 
     const handleRetry = async () => {
         setIsRetrying(true)
-        await loadDishes()
-        await loadOrders()
-        await loadStatuses()
-        await loadProducts()
-        await loadCategories()
+        // Recargamos todo en la secuencia correcta
+        await loadStatuses();
+        await Promise.all([
+            loadDishes(),
+            loadProducts(),
+            loadCategories()
+        ]);
+        // El useEffect se encargará de llamar a loadOrders
         setTimeout(() => setIsRetrying(false), 1000)
     }
 
@@ -610,7 +631,7 @@ export function Dishes({ user }) {
     }
 
     // Función para actualizar el estado de una orden
-    const updateOrderStatus = async (orderId, newStatus) => {
+    const updateOrderStatus = async (orderId, newStatusId) => {
         try {
             setLoading(true)
 
@@ -620,20 +641,19 @@ export function Dishes({ user }) {
                 return
             }
 
-            // Actualizar el estado directamente en la orden
             const orderData = {
-                status: newStatus,
+                status_id: newStatusId,
             }
 
             const result = await updateOrder(order.order_id, orderData)
 
             if (result && !result.isConnectionError) {
                 // Si el plato pasa a "preparando", reducir inventario
-                if (newStatus === "preparando" && order.dishData.products && Array.isArray(order.dishData.products)) {
+                if (newStatusId === "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380a66" && order.dishData.products && Array.isArray(order.dishData.products)) {
                     await reduceProductInventory(order.dishData.products)
                 }
-
-                showSuccess("Éxito", `Estado actualizado a: ${newStatus}`)
+                const newStatusName = statusMap[newStatusId] || 'desconocido';
+                showSuccess("Éxito", `Estado actualizado a: ${newStatusName}`)
                 await loadOrders()
             } else {
                 throw new Error("No se pudo actualizar el estado de la orden")
@@ -671,7 +691,8 @@ export function Dishes({ user }) {
             // Crear la orden
             const orderData = {
                 dishes_id: dish.dishes_id,
-                user_id: user?.user_id || "default-user-id", // Usar el ID del usuario actual
+                user_id: null, // Usar el ID del usuario actual
+                status_id: '894c072f-cd61-4512-b851-6caf6b11d505' // ID para 'pendiente'
             }
 
             console.log("Creando orden:", orderData)
@@ -738,7 +759,7 @@ export function Dishes({ user }) {
             case "pendiente":
                 return (
                     <button
-                        onClick={() => updateOrderStatus(order.id, "preparando")}
+                        onClick={() => updateOrderStatus(order.id, "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380a66")}
                         className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors"
                     >
                         Iniciar
@@ -747,7 +768,7 @@ export function Dishes({ user }) {
             case "preparando":
                 return (
                     <button
-                        onClick={() => updateOrderStatus(order.id, "listo")}
+                        onClick={() => updateOrderStatus(order.id, "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a55")}
                         className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors"
                     >
                         Completar
@@ -756,7 +777,7 @@ export function Dishes({ user }) {
             case "listo":
                 return (
                     <button
-                        onClick={() => updateOrderStatus(order.id, "entregado")}
+                        onClick={() => updateOrderStatus(order.id, "e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a53")}
                         className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
                     >
                         Entregar

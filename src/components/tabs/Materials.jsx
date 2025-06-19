@@ -633,12 +633,12 @@ function MaterialCard({ material, onEdit, onDelete, isOffline }) {
     const quantity = material.material_detail?.quantity || 0
     const price = material.material_detail?.price || 0
     const description = material.material_detail?.description || "Sin descripción"
-
     const getStockStatus = () => {
         if (quantity === 0) return { color: "text-red-600 bg-red-50", text: "Sin stock" }
         if (quantity < 10) return { color: "text-yellow-600 bg-yellow-50", text: "Stock bajo" }
         return { color: "text-green-600 bg-green-50", text: "En stock" }
     }
+    console.log(material)
 
     const stockStatus = getStockStatus()
 
