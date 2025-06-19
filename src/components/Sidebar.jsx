@@ -16,7 +16,7 @@ export const Sidebar = ({ activeCategory, setActiveCategory, user, onLogout }) =
                 { id: "materiales", label: "Materiales", icon: <Wrench size={16} /> },
                 { id: "provedores", label: "Proveedores", icon: <Truck size={16} /> },
                 { id: "platos", label: "Platos", icon: <ChefHat size={16} /> },
-                { id: "ventas", label: "Ventas", icon: <Package size={16} /> },
+                // { id: "ventas", label: "Ventas", icon: <Package size={16} /> },
             ]
         } else {
             // Para clientes, mostrar menú de ecommerce
