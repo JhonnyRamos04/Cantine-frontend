@@ -2,23 +2,29 @@ import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
+import { getCategories } from "../utils/categories.js"
+import { getStatuses } from "../utils/status.js"
+import {
+    createProvider,
+    updateProvider,
+    getProviders,
+} from "../utils/providers.js"
+
+import {
+    createMaterial,
+    updateMaterial,
+    createMaterialDetail,
+    updateMaterialDetail, // Importar la función para actualizar detalles de material
+    getMaterialDetailById
+} from "../utils/materials.js"
+
 import {
     createProduct,
     updateProduct,
-    createMaterial,
-    updateMaterial,
-    createProvider,
-    updateProvider,
-    getCategories,
-    getStatuses,
-    getProviders,
     createProductDetail,
     updateProductDetail,
-    createMaterialDetail,
-    updateMaterialDetail, // Importar la función para actualizar detalles de material
-    getMaterialDetailById,
-    getProductDetailById, // Importar para obtener detalles de material
-} from "../utils/db"
+    getProductDetailById
+} from "../utils/products.js"
 
 export function ItemFormModal({ isOpen, onClose, onSave, item, mode, itemType }) {
     const [formData, setFormData] = useState({

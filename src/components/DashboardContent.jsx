@@ -16,7 +16,7 @@ export function DashboardContent({ activeCategory, user }) {
                         (user?.role === "admin" ? "Gestión de Productos" : "Nuestros Deliciosos Platos")}
                     {activeCategory === "materiales" && "Gestión de Materiales"}
                     {activeCategory === "provedores" && "Gestión de Proveedores"}
-                    {activeCategory === "platos" && (user?.role === "admin" ? "Gestión de Platos" : "Mis Órdenes")}
+                    {activeCategory === "platos" && (user?.role === "admin" ? "Gestión de Platos" : "")}
                     {activeCategory === "ventas" && "Reporte de Ventas"}
                 </h1>
                 <p className="text-gray-600">

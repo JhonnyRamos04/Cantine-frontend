@@ -1,38 +1,57 @@
+"use client"
+
 import { useState, useEffect } from "react"
 import {
     Clock,
-    CheckCircle,
     Package,
     AlertCircle,
     RefreshCw,
-    Plus,
-    Trash,
     ShoppingCart,
     Search,
     Star,
     Grid,
     List,
+    CheckCircle,
+    Plus,
+    Edit,
+    Trash2,
+    Filter,
+    ChevronLeft,
+    ChevronRight,
+    UtensilsCrossed,
 } from "lucide-react"
-import { getDishes, createDish, updateDish, deleteDish, getStatuses, getProducts, getCategories } from "../../utils/db"
+import { getDishes, createDish, updateDish, deleteDish } from "../../utils/dishes.js"
+import { getOrders, createOrder, updateOrder } from "../../utils/orders.js"
+import { getStatuses } from "../../utils/status.js"
+import { getProducts, updateProductDetail } from "../../utils/products.js"
+import { getCategories } from "../../utils/categories.js"
 import { useToast } from "../ui/toast-container"
 import { ConnectionStatus } from "../ui/ConnectionStatus"
 import { OfflinePlaceholder } from "../ui/OfflinePlaceholder"
-import { ConfirmationDialog } from "../ui/ConfirmationDialog"
-import { logDishUpdate, validateDishData, debugDishes } from "../../utils/debug-utils"
 
 // Componente para la vista de ecommerce de platos
 function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) {
-    const [viewMode, setViewMode] = useState("grid") // grid o list
+    const [viewMode, setViewMode] = useState("grid")
     const [selectedCategory, setSelectedCategory] = useState("")
     const [searchTerm, setSearchTerm] = useState("")
-    const [sortBy, setSortBy] = useState("name") // name, price, rating
+    const [sortBy, setSortBy] = useState("name")
 
-    // Asegurar que categories sea siempre un array
     const safeCategories = Array.isArray(categories) ? categories : []
     const safeDishes = Array.isArray(dishes) ? dishes : []
 
+    // Filtrar platos disponibles (que tengan stock)
+    const availableDishes = safeDishes.filter((dish) => {
+        // Verificar si el plato tiene productos y si hay stock disponible
+        if (dish.products && Array.isArray(dish.products)) {
+            return dish.products.every((product) => {
+                return product.product_detail && product.product_detail.quantity > 0
+            })
+        }
+        return true // Si no tiene productos definidos, considerarlo disponible
+    })
+
     // Filtrar platos
-    const filteredDishes = safeDishes.filter((dish) => {
+    const filteredDishes = availableDishes.filter((dish) => {
         const matchesSearch = dish.name.toLowerCase().includes(searchTerm.toLowerCase())
         const matchesCategory = !selectedCategory || dish.category_id === Number.parseInt(selectedCategory)
         return matchesSearch && matchesCategory
@@ -64,7 +83,6 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
             {/* Filtros y controles */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
                 <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-                    {/* Búsqueda */}
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                         <input
@@ -77,9 +95,7 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
                         />
                     </div>
 
-                    {/* Filtros */}
                     <div className="flex flex-wrap gap-3 items-center">
-                        {/* Filtro por categoría */}
                         <select
                             value={selectedCategory}
                             onChange={(e) => setSelectedCategory(e.target.value)}
@@ -94,7 +110,6 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
                             ))}
                         </select>
 
-                        {/* Ordenar por */}
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
@@ -106,7 +121,6 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
                             <option value="rating">Ordenar por valoración</option>
                         </select>
 
-                        {/* Vista */}
                         <div className="flex border border-gray-300 rounded-lg overflow-hidden">
                             <button
                                 onClick={() => setViewMode("grid")}
@@ -155,9 +169,15 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
                     <div className="text-gray-400 mb-4">
                         <ShoppingCart size={48} className="mx-auto" />
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron platos</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                        {availableDishes.length === 0 ? "No hay platos con stock disponible" : "No se encontraron platos"}
+                    </h3>
                     <p className="text-gray-500">
-                        {isOffline ? "Sin conexión al servidor" : "Intenta ajustar los filtros de búsqueda"}
+                        {isOffline
+                            ? "Sin conexión al servidor"
+                            : availableDishes.length === 0
+                                ? "Todos los platos están agotados"
+                                : "Intenta ajustar los filtros de búsqueda"}
                     </p>
                 </div>
             )}
@@ -167,33 +187,33 @@ function EcommerceView({ dishes, categories, loading, isOffline, onAddToCart }) 
 
 // Componente para mostrar un plato en vista de cuadrícula
 function DishCard({ dish, onAddToCart, categories }) {
-    // Calcular el precio como la suma de los productos relacionados
-    let price = 0
-    if (dish.products && Array.isArray(dish.products)) {
-        price = dish.products.reduce((sum, prod) => sum + (prod.price || 0) * (prod.quantity || 1), 0)
-    } else if (dish.price) {
-        // Usar el precio ya calculado si existe
-        price = dish.price
-    }
-
+    const price = dish.price || 0
     const description = dish.description || "Delicioso plato preparado con ingredientes frescos y de la mejor calidad."
-    const rating = dish.rating || 4.2 // Rating simulado
+    const rating = dish.rating || 4.2
 
-    // Encontrar la categoría del plato
     const category = categories.find((c) => c.category_id === dish.category_id)
+
+    // Verificar stock disponible
+    const hasStock =
+        dish.products && Array.isArray(dish.products)
+            ? dish.products.every((product) => product.product_detail && product.product_detail.quantity > 0)
+            : true
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-            {/* Imagen del plato */}
             <div className="aspect-w-16 aspect-h-12 bg-gray-200 relative">
                 <img
                     src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
                     alt={dish.name}
                     className="w-full h-48 object-cover"
                 />
+                {!hasStock && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                        <span className="text-white font-bold">AGOTADO</span>
+                    </div>
+                )}
             </div>
 
-            {/* Contenido */}
             <div className="p-4">
                 <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold text-gray-900 text-lg leading-tight">{dish.name}</h3>
@@ -214,20 +234,22 @@ function DishCard({ dish, onAddToCart, categories }) {
                 <p className="text-gray-600 text-sm mb-3 line-clamp-2">{description}</p>
 
                 <div className="flex items-center justify-between mb-3">
-                    <div className="text-2xl font-bold text-green-600">${price.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-600">${price}</div>
                     {dish.products && dish.products.length > 0 && (
                         <div className="text-xs text-gray-500">
-                            {dish.products.length} {dish.products.length === 1 ? "producto" : "productos"}
+                            Stock: {dish.products.reduce((total, product) => total + (product.product_detail?.quantity || 0), 0)}
                         </div>
                     )}
                 </div>
 
                 <button
                     onClick={() => onAddToCart(dish)}
-                    className="w-full py-2 px-4 rounded-lg font-medium transition-colors bg-green-500 hover:bg-green-600 text-white"
+                    disabled={!hasStock}
+                    className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${hasStock ? "bg-green-500 hover:bg-green-600 text-white" : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        }`}
                 >
                     <ShoppingCart size={16} className="inline mr-2" />
-                    Preparar
+                    {hasStock ? "Ordenar" : "Sin Stock"}
                 </button>
             </div>
         </div>
@@ -236,34 +258,33 @@ function DishCard({ dish, onAddToCart, categories }) {
 
 // Componente para mostrar un plato en vista de lista
 function DishListItem({ dish, onAddToCart, categories }) {
-    // Calcular el precio como la suma de los productos relacionados
-    let price = 0
-    if (dish.products && Array.isArray(dish.products)) {
-        price = dish.products.reduce((sum, prod) => sum + (prod.price || 0) * (prod.quantity || 1), 0)
-    } else if (dish.price) {
-        // Usar el precio ya calculado si existe
-        price = dish.price
-    }
-
+    const price = dish.price || 0
     const description = dish.description || "Delicioso plato preparado con ingredientes frescos y de la mejor calidad."
     const rating = dish.rating || 4.2
 
-    // Encontrar la categoría del plato
     const category = categories.find((c) => c.category_id === dish.category_id)
+
+    const hasStock =
+        dish.products && Array.isArray(dish.products)
+            ? dish.products.every((product) => product.product_detail && product.product_detail.quantity > 0)
+            : true
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
             <div className="flex gap-4">
-                {/* Imagen */}
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 relative">
                     <img
                         src={`https://placehold.co/120x120/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
                         alt={dish.name}
                         className="w-24 h-24 object-cover rounded-lg"
                     />
+                    {!hasStock && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                            <span className="text-white text-xs font-bold">AGOTADO</span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Contenido */}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -283,22 +304,102 @@ function DishListItem({ dish, onAddToCart, categories }) {
                             <p className="text-gray-600 text-sm">{description}</p>
                             {dish.products && dish.products.length > 0 && (
                                 <p className="text-xs text-gray-500 mt-1">
-                                    {dish.products.length} {dish.products.length === 1 ? "producto" : "productos"}
+                                    Stock disponible:{" "}
+                                    {dish.products.reduce((total, product) => total + (product.product_detail?.quantity || 0), 0)}
                                 </p>
                             )}
                         </div>
 
                         <div className="flex flex-col items-end gap-3 ml-4">
-                            <div className="text-2xl font-bold text-green-600">${price.toFixed(2)}</div>
+                            <div className="text-2xl font-bold text-green-600">${price}</div>
                             <button
                                 onClick={() => onAddToCart(dish)}
-                                className="py-2 px-4 rounded-lg font-medium transition-colors bg-green-500 hover:bg-green-600 text-white"
+                                disabled={!hasStock}
+                                className={`py-2 px-4 rounded-lg font-medium transition-colors ${hasStock
+                                    ? "bg-green-500 hover:bg-green-600 text-white"
+                                    : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                    }`}
                             >
                                 <ShoppingCart size={16} className="inline mr-2" />
-                                Preparar
+                                {hasStock ? "Ordenar" : "Sin Stock"}
                             </button>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// Componente para tarjeta de plato en gestión
+function DishManagementCard({ dish, categories, onEdit, onDelete, isOffline }) {
+    const price = dish.price || 0
+    const category = categories.find((c) => c.category_id === dish.category_id)
+
+    const getStockStatus = () => {
+        if (dish.products && Array.isArray(dish.products)) {
+            const totalStock = dish.products.reduce((total, product) => total + (product.product_detail?.quantity || 0), 0)
+            if (totalStock === 0) return { color: "text-red-600 bg-red-50", text: "Sin stock" }
+            if (totalStock < 10) return { color: "text-yellow-600 bg-yellow-50", text: "Stock bajo" }
+            return { color: "text-green-600 bg-green-50", text: "En stock" }
+        }
+        return { color: "text-gray-600 bg-gray-50", text: "Sin productos" }
+    }
+
+    const stockStatus = getStockStatus()
+
+    return (
+        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+            <div className="aspect-video bg-gray-200 relative mb-4 rounded-lg overflow-hidden">
+                <img
+                    src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
+                    alt={dish.name}
+                    className="w-full h-full object-cover"
+                />
+                <div className="absolute top-2 right-2">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${stockStatus.color}`}>{stockStatus.text}</span>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                <div className="flex justify-between items-start">
+                    <h3 className="font-semibold text-gray-900 text-lg truncate">{dish.name}</h3>
+                    {category && (
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full ml-2">{category.name}</span>
+                    )}
+                </div>
+
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-500">Precio:</span>
+                        <span className="font-medium text-green-600">${price}</span>
+                    </div>
+                    {dish.products && dish.products.length > 0 && (
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-500">Stock total:</span>
+                            <span className="font-medium">
+                                {dish.products.reduce((total, product) => total + (product.product_detail?.quantity || 0), 0)}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                    <button
+                        onClick={() => onEdit(dish)}
+                        disabled={isOffline}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <Edit size={16} />
+                        Editar
+                    </button>
+                    <button
+                        onClick={() => onDelete(dish.id)}
+                        disabled={isOffline}
+                        className="flex items-center justify-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                        <Trash2 size={16} />
+                    </button>
                 </div>
             </div>
         </div>
@@ -319,27 +420,28 @@ export function Dishes({ user }) {
     const [products, setProducts] = useState([])
     const [categories, setCategories] = useState([])
     const [selectedProducts, setSelectedProducts] = useState([])
-    const [totalPrice, setTotalPrice] = useState(0)
     const [cart, setCart] = useState([])
     const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, dishId: null })
 
+    // Estados para la gestión de platos
+    const [dishViewMode, setDishViewMode] = useState("grid")
+    const [dishSearchTerm, setDishSearchTerm] = useState("")
+    const [dishCurrentPage, setDishCurrentPage] = useState(1)
+    const [dishItemsPerPage, setDishItemsPerPage] = useState(12)
+    const [dishSortBy, setDishSortBy] = useState("name")
+    const [dishSortOrder, setDishSortOrder] = useState("asc")
+    const [dishFilterCategory, setDishFilterCategory] = useState("all")
+    const [showDishFilters, setShowDishFilters] = useState(false)
+
     const { showSuccess, showError, showWarning } = useToast()
 
-    // Cargar platos, estados, productos y categorías al montar el componente
     useEffect(() => {
         loadDishes()
+        loadOrders()
         loadStatuses()
         loadProducts()
         loadCategories()
     }, [])
-
-    // Calcular el precio total cuando cambian los productos seleccionados
-    useEffect(() => {
-        const total = selectedProducts.reduce((sum, product) => {
-            return sum + (product.price || 0) * (product.quantity || 1)
-        }, 0)
-        setTotalPrice(total)
-    }, [selectedProducts])
 
     const loadStatuses = async () => {
         try {
@@ -348,13 +450,11 @@ export function Dishes({ user }) {
                 const statusesArray = Array.isArray(data) ? data : []
                 setStatuses(statusesArray)
 
-                // Crear un mapa de ID de estado a nombre de estado para facilitar la referencia
                 const map = {}
                 statusesArray.forEach((status) => {
                     map[status.status_id] = status.name.toLowerCase()
                 })
                 setStatusMap(map)
-                console.log("Mapa de estados cargado:", map)
             }
         } catch (error) {
             console.error("Error cargando estados:", error)
@@ -389,105 +489,85 @@ export function Dishes({ user }) {
         }
     }
 
-    // Modificar la función loadDishes para asegurar que los precios se calculen correctamente
     const loadDishes = async () => {
+        try {
+            const data = await getDishes()
+            if (data && !data.isConnectionError) {
+                const formattedDishes = Array.isArray(data)
+                    ? data.map((dish) => ({
+                        id: dish.dishes_id,
+                        dishes_id: dish.dishes_id,
+                        name: dish.name,
+                        price: dish.price || 0,
+                        category_id: dish.category_id,
+                        products_id: dish.products_id,
+                        products: dish.products || [],
+                        originalData: dish,
+                    }))
+                    : []
+
+                setAvailableDishes(formattedDishes)
+            } else {
+                setAvailableDishes([])
+            }
+        } catch (error) {
+            console.error("Error cargando platos:", error)
+            setAvailableDishes([])
+        }
+    }
+
+    const loadOrders = async () => {
         setLoading(true)
         setError(null)
         setIsOffline(false)
 
         try {
-            const data = await getDishes()
+            const data = await getOrders()
 
             if (data && data.isConnectionError) {
                 setIsOffline(true)
                 setOrders([])
-                setAvailableDishes([])
-                console.log("Sin conexión a la base de datos")
             } else if (data && data.success === false) {
-                setError(data.error || "Error al cargar los platos")
+                setError(data.error || "Error al cargar las órdenes")
                 setOrders([])
-                setAvailableDishes([])
             } else {
-                console.log("Platos cargados:", data)
+                const formattedOrders = Array.isArray(data)
+                    ? data.map((order) => {
+                        // Buscar información del plato
+                        const dish = availableDishes.find((d) => d.dishes_id === order.dishes_id) || {}
 
-                // Depurar el estado actual de los platos
-                await debugDishes(data)
-
-                // Transformar los datos de la API al formato que espera el componente
-                const formattedDishes = Array.isArray(data)
-                    ? data.map((dish) => {
-                        // Determinar el estado basado en status_id o usar null por defecto
-                        const statusName = dish.status_id ? statusMap[dish.status_id] || "pendiente" : null
-
-                        // Calcular el precio como la suma de los productos relacionados
-                        let price = 0
-                        if (dish.products && Array.isArray(dish.products)) {
-                            price = dish.products.reduce((sum, product) => {
-                                const productPrice = product.price || 0
-                                const quantity = product.quantity || 1
-                                return sum + productPrice * quantity
-                            }, 0)
-                            console.log(`Precio calculado para plato ${dish.name}:`, price)
-                        } else if (dish.price) {
-                            price = dish.price
-                            console.log(`Usando precio existente para plato ${dish.name}:`, price)
-                        }
-
-                        // Asegurarse de que el precio nunca sea 0 o undefined
-                        if (price === 0 || price === undefined) {
-                            console.warn(`Precio cero o indefinido para plato ${dish.name}, usando valor por defecto`)
-                            price = dish.price || 0
-                        }
-
-                        // Enriquecer los productos con información adicional si es posible
-                        let enrichedProducts = []
-                        if (dish.products && Array.isArray(dish.products)) {
-                            enrichedProducts = dish.products.map((prod) => {
-                                // Buscar información adicional del producto en la lista de productos
-                                const fullProduct = products.find((p) => p.products_id === prod.products_id)
-                                return {
-                                    ...prod,
-                                    name: fullProduct?.name || prod.name || `Producto ${prod.products_id}`,
-                                    price: prod.price || fullProduct?.price || 0,
-                                }
-                            })
-                        }
+                        // El estado ahora viene directamente de la orden
+                        const statusName = order.status || "pendiente"
 
                         return {
-                            id: dish.dishes_id,
-                            dishes_id: dish.dishes_id,
-                            name: dish.name,
+                            id: order.order_id,
+                            order_id: order.order_id,
+                            dishes_id: order.dishes_id,
+                            user_id: order.user_id,
+                            name: dish.name || "Plato desconocido",
                             status: statusName,
-                            status_id: dish.status_id, // Guardar el ID de estado original
-                            time: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }),
-                            customer: dish.customer || `Mesa ${Math.floor(Math.random() * 10) + 1}`,
-                            priority: dish.priority || "normal",
-                            price: price, // Agregar el precio calculado
+                            time: new Date(order.created_at || Date.now()).toLocaleTimeString("es-ES", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            }),
+                            customer: `Mesa ${Math.floor(Math.random() * 10) + 1}`,
+                            priority: "normal",
+                            price: dish.price || 0,
                             category_id: dish.category_id,
-                            products: enrichedProducts.length > 0 ? enrichedProducts : dish.products || [],
-                            // Guardar los datos originales para referencia
-                            originalData: dish,
+                            originalData: order,
+                            dishData: dish,
                         }
                     })
                     : []
 
-                // Separar platos con estado (órdenes) y platos disponibles (sin estado)
-                const ordersWithStatus = formattedDishes.filter((dish) => dish.status !== 'pendiente')
-                const dishesWithoutStatus = formattedDishes.filter((dish) => dish.status === 'ninguno')
-
-                console.log("Órdenes con estado:", ordersWithStatus)
-                console.log("Platos disponibles:", dishesWithoutStatus)
-
-                setOrders(ordersWithStatus)
-                setAvailableDishes(dishesWithoutStatus)
+                setOrders(formattedOrders)
                 setIsOffline(false)
             }
         } catch (error) {
-            console.error("Error cargando platos:", error)
-            setError("Error inesperado al cargar los platos")
+            console.error("Error cargando órdenes:", error)
+            setError("Error inesperado al cargar las órdenes")
             setIsOffline(true)
             setOrders([])
-            setAvailableDishes([])
         } finally {
             setLoading(false)
         }
@@ -496,59 +576,67 @@ export function Dishes({ user }) {
     const handleRetry = async () => {
         setIsRetrying(true)
         await loadDishes()
+        await loadOrders()
         await loadStatuses()
         await loadProducts()
         await loadCategories()
         setTimeout(() => setIsRetrying(false), 1000)
     }
 
-    // Modificar la función updateStatus para asegurar que se mantengan los productos y el precio
-    const updateStatus = async (id, newStatus) => {
+    // Función para reducir el inventario de productos
+    const reduceProductInventory = async (dishProducts) => {
+        try {
+            for (const dishProduct of dishProducts) {
+                const product = products.find((p) => p.products_id === dishProduct.products_id)
+                if (product && product.product_detail) {
+                    const newQuantity = (product.product_detail.quantity || 0) - (dishProduct.quantity || 1)
+
+                    const updateResult = await updateProductDetail(product.product_detail.product_detail_id, {
+                        ...product.product_detail,
+                        quantity: Math.max(0, newQuantity),
+                    })
+
+                    if (updateResult && !updateResult.isConnectionError) {
+                        console.log(`Inventario reducido para ${product.name}: ${newQuantity}`)
+                    }
+                }
+            }
+
+            await loadProducts()
+            await loadDishes() // Recargar platos para actualizar disponibilidad
+        } catch (error) {
+            console.error("Error reduciendo inventario:", error)
+        }
+    }
+
+    // Función para actualizar el estado de una orden
+    const updateOrderStatus = async (orderId, newStatus) => {
         try {
             setLoading(true)
 
-            // Encontrar el plato en nuestro estado local
-            const dish = [...orders, ...availableDishes].find((dish) => dish.id === id)
-            if (!dish || !dish.originalData) {
-                showError("Error", "No se encontró información del plato")
+            const order = orders.find((order) => order.id === orderId)
+            if (!order) {
+                showError("Error", "No se encontró información de la orden")
                 return
             }
 
-            // Encontrar el ID de estado correspondiente al nombre de estado
-            const statusId = Object.keys(statusMap).find((key) => statusMap[key] === newStatus)
-            if (!statusId) {
-                showError("Error", `No se encontró el estado: ${newStatus}`)
-                return
+            // Actualizar el estado directamente en la orden
+            const orderData = {
+                status: newStatus,
             }
 
-            // Asegurarse de mantener todos los datos importantes del plato
-            const dishData = {
-                name: dish.name,
-                status_id: statusId,
-                category_id: dish.category_id || dish.originalData.category_id || null,
-                products: dish.products_id || dish.originalData.products_id || [],
-                price: dish.price || 0,
-            }
+            const result = await updateOrder(order.order_id, orderData)
 
-            console.log("Actualizando estado del plato con datos:", dishData)
+            if (result && !result.isConnectionError) {
+                // Si el plato pasa a "preparando", reducir inventario
+                if (newStatus === "preparando" && order.dishData.products && Array.isArray(order.dishData.products)) {
+                    await reduceProductInventory(order.dishData.products)
+                }
 
-            // Validar los datos antes de enviarlos
-            if (!validateDishData(dishData)) {
-                showError("Error", "Datos del plato inválidos para actualización")
-                setLoading(false)
-                return
-            }
-
-            const result = await updateDish(dish.id, dishData)
-            await logDishUpdate(dish, dishData, result)
-
-            if (result && result.isConnectionError) {
-                showError("Sin conexión", "No se puede actualizar el estado sin conexión al servidor")
-            } else if (result) {
                 showSuccess("Éxito", `Estado actualizado a: ${newStatus}`)
-                await loadDishes() // Recargar platos para actualizar las listas
+                await loadOrders()
             } else {
-                throw new Error("No se pudo actualizar el estado del plato")
+                throw new Error("No se pudo actualizar el estado de la orden")
             }
         } catch (error) {
             console.error("Error actualizando estado:", error)
@@ -558,66 +646,62 @@ export function Dishes({ user }) {
         }
     }
 
-    // Modificar la función handleAddToCart para asegurar que se actualice correctamente el estado
+    // Función para crear una nueva orden
     const handleAddToCart = async (dish) => {
         try {
-            // Agregar al carrito local
-            const existingItem = cart.find((cartItem) => cartItem.dishes_id === dish.dishes_id)
+            // Verificar disponibilidad de productos antes de crear la orden
+            if (dish.products && Array.isArray(dish.products)) {
+                for (const dishProduct of dish.products) {
+                    const availableProduct = products.find((p) => p.products_id === dishProduct.products_id)
+                    if (availableProduct && availableProduct.product_detail) {
+                        const requiredQuantity = dishProduct.quantity || 1
+                        const availableQuantity = availableProduct.product_detail.quantity || 0
 
-            if (existingItem) {
-                setCart(
-                    cart.map((cartItem) =>
-                        cartItem.dishes_id === dish.dishes_id ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem,
-                    ),
-                )
-            } else {
-                setCart([...cart, { ...dish, quantity: 1 }])
+                        if (availableQuantity < requiredQuantity) {
+                            showError(
+                                "Stock insuficiente",
+                                `No hay suficiente ${availableProduct.name}. Disponible: ${availableQuantity}, Requerido: ${requiredQuantity}`,
+                            )
+                            return
+                        }
+                    }
+                }
             }
 
-            // Cambiar el estado del plato a "pendiente" (preparar)
-            console.log("Preparando plato:", dish)
-
-            // Encontrar el ID de estado correspondiente a "pendiente"
-            const pendienteStatusId = Object.keys(statusMap).find((key) => statusMap[key] === "pendiente")
-
-            if (!pendienteStatusId) {
-                throw new Error("No se encontró el estado 'pendiente'")
+            // Crear la orden
+            const orderData = {
+                dishes_id: dish.dishes_id,
+                user_id: user?.user_id || "default-user-id", // Usar el ID del usuario actual
             }
 
-            // Asegurarse de que los productos y el precio se mantengan
-            const dishData = {
-                name: dish.name,
-                status_id: pendienteStatusId,
-                category_id: dish.category_id || null,
-                products: dish.products || [],
-                price: dish.price || 0,
-            }
+            console.log("Creando orden:", orderData)
 
-            console.log("Actualizando plato a pendiente con datos:", dishData)
-
-            // Validar los datos antes de enviarlos
-            if (!validateDishData(dishData)) {
-                showError("Error", "Datos del plato inválidos para actualización")
-                return
-            }
-
-            // Actualizar el plato en la base de datos
-            const result = await updateDish(dish.dishes_id, dishData)
-            await logDishUpdate(dish, dishData, result)
+            const result = await createOrder(orderData)
 
             if (result && result.isConnectionError) {
-                showError("Sin conexión", "No se puede actualizar el estado sin conexión al servidor")
-            } else if (result) {
-                showSuccess("¡Preparando!", `El plato ${dish.name} se está preparando`)
+                showError("Sin conexión", "No se puede crear la orden sin conexión al servidor")
+            } else if (result && result.success) {
+                showSuccess("¡Orden creada!", `Tu orden de ${dish.name} ha sido creada`)
 
-                // Forzar una recarga inmediata de los platos
-                await loadDishes()
+                // Agregar al carrito local para mostrar feedback inmediato
+                const existingItem = cart.find((cartItem) => cartItem.dishes_id === dish.dishes_id)
+                if (existingItem) {
+                    setCart(
+                        cart.map((cartItem) =>
+                            cartItem.dishes_id === dish.dishes_id ? { ...cartItem, quantity: cartItem.quantity + 1 } : cartItem,
+                        ),
+                    )
+                } else {
+                    setCart([...cart, { ...dish, quantity: 1 }])
+                }
+
+                await loadOrders()
             } else {
-                throw new Error("No se pudo actualizar el estado del plato")
+                throw new Error("No se pudo crear la orden")
             }
         } catch (error) {
-            console.error("Error al preparar el plato:", error)
-            showError("Error", `Error al preparar el plato: ${error.message}`)
+            console.error("Error al crear la orden:", error)
+            showError("Error", `Error al crear la orden: ${error.message}`)
         }
     }
 
@@ -654,7 +738,7 @@ export function Dishes({ user }) {
             case "pendiente":
                 return (
                     <button
-                        onClick={() => updateStatus(order.id, "preparando")}
+                        onClick={() => updateOrderStatus(order.id, "preparando")}
                         className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md transition-colors"
                     >
                         Iniciar
@@ -663,7 +747,7 @@ export function Dishes({ user }) {
             case "preparando":
                 return (
                     <button
-                        onClick={() => updateStatus(order.id, "listo")}
+                        onClick={() => updateOrderStatus(order.id, "listo")}
                         className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors"
                     >
                         Completar
@@ -672,7 +756,7 @@ export function Dishes({ user }) {
             case "listo":
                 return (
                     <button
-                        onClick={() => updateStatus(order.id, "entregado")}
+                        onClick={() => updateOrderStatus(order.id, "entregado")}
                         className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-md transition-colors"
                     >
                         Entregar
@@ -683,23 +767,8 @@ export function Dishes({ user }) {
         }
     }
 
-    // Corregir la función getOrdersByStatus para asegurar que los precios se muestren correctamente
     const getOrdersByStatus = (status) => {
-        return orders.filter((order) => {
-            // Verificar que el estado coincida
-            const matchesStatus = order.status === status
-
-            // Si coincide, asegurémonos de que el precio esté calculado correctamente
-            if (matchesStatus) {
-                // Si el precio es 0 o undefined, intentar calcularlo de los productos
-                if ((!order.price || order.price === 0) && order.products && Array.isArray(order.products)) {
-                    order.price = order.products.reduce((sum, prod) => sum + (prod.price || 0) * (prod.quantity || 1), 0)
-                    console.log(`Recalculando precio para orden ${order.name}:`, order.price)
-                }
-            }
-
-            return matchesStatus
-        })
+        return orders.filter((order) => order.status === status)
     }
 
     const getStatusTitle = (status) => {
@@ -710,6 +779,8 @@ export function Dishes({ user }) {
                 return "En Preparación"
             case "listo":
                 return "Listos para Entregar"
+            case "entregado":
+                return "Entregados"
             default:
                 return status
         }
@@ -718,45 +789,19 @@ export function Dishes({ user }) {
     const handleAddNewDish = () => {
         setEditingDish(null)
         setSelectedProducts([])
-        setTotalPrice(0)
         setIsModalOpen(true)
     }
 
-    const handleAddProduct = (productId, quantity = 1) => {
-        console.log("Añadiendo producto con ID:", productId)
-
-        // Intentar encontrar el producto por ID, independientemente del formato
-        const product = products.find(
-            (p) =>
-                p.products_id === productId ||
-                p.products_id === Number(productId) ||
-                String(p.products_id) === String(productId),
-        )
-
+    const handleAddProduct = (productId) => {
+        const product = products.find((p) => p.products_id === productId)
         if (!product) {
-            console.error("Producto no encontrado con ID:", productId)
             showWarning("Error", "No se pudo encontrar el producto seleccionado")
             return
         }
 
-        console.log("Producto encontrado:", product)
-
-        // Verificar si el producto ya está seleccionado
-        const existingProductIndex = selectedProducts.findIndex(
-            (p) => p.products_id === product.products_id || String(p.products_id) === String(product.products_id),
-        )
-
-        if (existingProductIndex >= 0) {
-            // Actualizar la cantidad si ya existe
-            const updatedProducts = [...selectedProducts]
-            updatedProducts[existingProductIndex] = {
-                ...updatedProducts[existingProductIndex],
-                quantity: (updatedProducts[existingProductIndex].quantity || 1) + quantity,
-            }
-            setSelectedProducts(updatedProducts)
-        } else {
-            // Agregar nuevo producto con cantidad
-            setSelectedProducts([...selectedProducts, { ...product, quantity }])
+        const isAlreadySelected = selectedProducts.some((p) => p.products_id === product.products_id)
+        if (!isAlreadySelected) {
+            setSelectedProducts([...selectedProducts, product])
         }
     }
 
@@ -764,102 +809,44 @@ export function Dishes({ user }) {
         setSelectedProducts(selectedProducts.filter((p) => p.products_id !== productId))
     }
 
-    const handleUpdateProductQuantity = (productId, quantity) => {
-        if (quantity <= 0) {
-            handleRemoveProduct(productId)
-            return
-        }
-
-        setSelectedProducts(selectedProducts.map((p) => (p.products_id === productId ? { ...p, quantity } : p)))
-    }
-
     const handleSaveDish = async (formData) => {
         try {
             setLoading(true)
 
-            if (selectedProducts.length === 0) {
-                showWarning("Advertencia", "Debe seleccionar al menos un producto para el plato")
-                setLoading(false)
-                return
-            }
-
-            // Calcular el precio total basado en los productos seleccionados
-            const calculatedPrice = selectedProducts.reduce((sum, product) => {
-                // Obtener el precio del producto, ya sea de product_detail o directamente
-                const productPrice = product.product_detail?.price || product.price || 0
-                return sum + productPrice * (product.quantity || 1)
-            }, 0)
-
-            console.log("Precio calculado del plato:", calculatedPrice)
-
-            // Preparar los productos para enviar al servidor
-            const productsForDish = selectedProducts.map((product) => ({
-                products_id: product.products_id,
-                quantity: product.quantity || 1,
-                price: product.product_detail?.price || product.price || 0,
-            }))
-
-            console.log("Productos para el plato:", productsForDish)
+            const manualPrice = Number.parseFloat(formData.price) || 0
+            const selectedProductId = selectedProducts.length > 0 ? selectedProducts[0].products_id : null
 
             if (editingDish) {
-                // Editar plato existente
                 const originalDish = editingDish.originalData
-
                 if (originalDish && originalDish.dishes_id) {
-                    // Si el plato original tenía el status "ninguno", mantenerlo.
-                    // De lo contrario, mantener el status_id original del plato que se está editando.
-                    const newStatusId = originalDish.status === 'ninguno' ? originalDish.status_id : editingDish.status_id;
-
-                    // Actualizar el plato principal
                     const dishData = {
                         name: formData.name,
                         category_id: formData.category_id || null,
-                        status_id: newStatusId,
-                        products: productsForDish[0].products_id,
-                        price: calculatedPrice, // Usar el precio calculado
-                    }
-
-                    console.log("Actualizando plato con datos:", dishData)
-
-                    // Validar los datos antes de enviarlos
-                    if (!validateDishData(dishData)) {
-                        showError("Error", "Datos del plato inválidos para actualización")
-                        setLoading(false)
-                        return
+                        status_id: originalDish.status_id,
+                        products_id: selectedProductId,
+                        price: manualPrice,
                     }
 
                     const result = await updateDish(originalDish.dishes_id, dishData)
-                    await logDishUpdate(editingDish, dishData, result)
-
-                    if (result && result.isConnectionError) {
-                        showError("Sin conexión", "No se puede actualizar el plato sin conexión al servidor")
-                    } else if (result) {
+                    if (result && !result.isConnectionError) {
                         showSuccess("Éxito", "Plato actualizado correctamente")
-                        await loadDishes() // Recargar platos
+                        await loadDishes()
                     } else {
                         throw new Error("No se pudo actualizar el plato")
                     }
-                } else {
-                    throw new Error("No se encontró información del plato original")
                 }
             } else {
-                // Crear nuevo plato
                 const dishData = {
                     name: formData.name,
                     category_id: formData.category_id || null,
-                    status_id: 'e4eebc99-9c0b-4ef8-bb6d-6bb9bd380a53', // Inicialmente 'pendiente' para nuevos platos
-                    products: productsForDish[0].products_id,
-                    price: calculatedPrice, // Usar el precio calculado
+                    products_id: selectedProductId,
+                    price: manualPrice,
                 }
 
-                console.log("Creando plato con datos:", dishData)
                 const result = await createDish(dishData)
-
-                if (result && result.isConnectionError) {
-                    showError("Sin conexión", "No se puede crear el plato sin conexión al servidor")
-                } else if (result && result.success) {
+                if (result && result.success) {
                     showSuccess("Éxito", "Plato creado correctamente")
-                    await loadDishes() // Recargar platos
+                    await loadDishes()
                 } else {
                     throw new Error("No se pudo crear el plato")
                 }
@@ -876,30 +863,11 @@ export function Dishes({ user }) {
     }
 
     const handleEditDish = (dish) => {
-        // Preparar los productos seleccionados
-        let dishProducts = []
-        if (dish.originalData && dish.originalData.products && Array.isArray(dish.originalData.products)) {
-            dishProducts = dish.originalData.products
-                .map((p) => {
-                    // Buscar el producto completo en la lista de productos
-                    const fullProduct = products.find((product) => product.products_id === p.products_id)
-                    if (fullProduct) {
-                        return {
-                            ...fullProduct,
-                            quantity: p.quantity || 1,
-                        }
-                    }
-                    return null
-                })
-                .filter((p) => p) // Filtrar productos no encontrados
-        }
-
-        setSelectedProducts(dishProducts)
+        setSelectedProducts([])
         setEditingDish(dish)
         setIsModalOpen(true)
     }
 
-    // Nueva función para manejar la eliminación de platos
     const handleDeleteClick = (dishId) => {
         if (isOffline) {
             showWarning("Sin conexión", "No se pueden eliminar platos sin conexión al servidor")
@@ -914,13 +882,11 @@ export function Dishes({ user }) {
         setDeleteConfirm({ isOpen: true, dishId })
     }
 
-    // Función para confirmar la eliminación de un plato
     const handleDeleteConfirm = async () => {
         try {
             setLoading(true)
 
             if (deleteConfirm.dishId) {
-                console.log("Eliminando plato con ID:", deleteConfirm.dishId)
                 const result = await deleteDish(deleteConfirm.dishId)
 
                 if (result && result.isConnectionError) {
@@ -941,16 +907,60 @@ export function Dishes({ user }) {
         }
     }
 
-    // Excluir el estado "ninguno" de la lista de estados para la gestión de órdenes
-    const statusList = ["pendiente", "preparando", "listo"];
+    // Filtrar y ordenar platos para gestión
+    const filteredDishes = availableDishes
+        .filter((dish) => {
+            const matchesSearch = dish.name.toLowerCase().includes(dishSearchTerm.toLowerCase())
+            const matchesCategory = dishFilterCategory === "all" || dish.category_id === dishFilterCategory
+            return matchesSearch && matchesCategory
+        })
+        .sort((a, b) => {
+            let aValue, bValue
+            switch (dishSortBy) {
+                case "name":
+                    aValue = a.name.toLowerCase()
+                    bValue = b.name.toLowerCase()
+                    break
+                case "price":
+                    aValue = a.price || 0
+                    bValue = b.price || 0
+                    break
+                case "category":
+                    const aCat = categories.find((c) => c.category_id === a.category_id)?.name || ""
+                    const bCat = categories.find((c) => c.category_id === b.category_id)?.name || ""
+                    aValue = aCat.toLowerCase()
+                    bValue = bCat.toLowerCase()
+                    break
+                default:
+                    aValue = a.name.toLowerCase()
+                    bValue = b.name.toLowerCase()
+            }
 
-    // Si está offline, mostrar placeholder
+            if (dishSortOrder === "asc") {
+                return aValue > bValue ? 1 : -1
+            } else {
+                return aValue < bValue ? 1 : -1
+            }
+        })
+
+    // Paginación para platos
+    const dishTotalPages = Math.ceil(filteredDishes.length / dishItemsPerPage)
+    const dishStartIndex = (dishCurrentPage - 1) * dishItemsPerPage
+    const paginatedDishes = filteredDishes.slice(dishStartIndex, dishStartIndex + dishItemsPerPage)
+
+    // Resetear página cuando cambian los filtros
+    useEffect(() => {
+        setDishCurrentPage(1)
+    }, [dishSearchTerm, dishFilterCategory, dishSortBy, dishSortOrder])
+
+    const statusList = ["pendiente", "preparando", "listo", "entregado"]
+
     if (isOffline && !loading) {
         return (
             <div className="space-y-6">
                 <ConnectionStatus onRetry={handleRetry} />
                 <OfflinePlaceholder
-                    title="Platos no disponibles"
+                    title="Órdenes no disponibles"
                     message="No se puede conectar con el servidor. Verifica tu conexión e intenta nuevamente."
                     onRetry={handleRetry}
                     isRetrying={isRetrying}
@@ -1018,8 +1028,6 @@ export function Dishes({ user }) {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             {statusList.map((status) => (
                                 <div key={status} className="border rounded-lg p-4 bg-gray-50">
-                                    {getStatusTitle(status) != 'ninguno' && (<>
-                                    </>)}
                                     <div className="flex items-center justify-between mb-4">
                                         <h3 className="font-medium text-gray-700">{getStatusTitle(status)}</h3>
                                         <span className="bg-gray-200 text-gray-700 px-2 py-1 rounded-full text-sm">
@@ -1039,7 +1047,7 @@ export function Dishes({ user }) {
                                                 </div>
 
                                                 <div className="text-sm text-gray-600 mb-3">
-                                                    <p className="font-medium text-green-600 text-base mb-1">${(order.price || 0).toFixed(2)}</p>
+                                                    <p className="font-medium text-green-600 text-base mb-1">${order.price}</p>
                                                     {order.category_id && categories.length > 0 && (
                                                         <p>
                                                             Categoría:{" "}
@@ -1048,19 +1056,6 @@ export function Dishes({ user }) {
                                                             </span>
                                                         </p>
                                                     )}
-                                                    {order.products && order.products.length > 0 && (
-                                                        <div>
-                                                            <p className="font-medium mt-1">Productos ({order.products.length}):</p>
-                                                            <ul className="list-disc list-inside pl-2 text-xs">
-                                                                {order.products.slice(0, 3).map((prod, idx) => (
-                                                                    <li key={idx}>
-                                                                        {prod.name || `Producto ${idx + 1}`} x{prod.quantity || 1}
-                                                                    </li>
-                                                                ))}
-                                                                {order.products.length > 3 && <li>Y {order.products.length - 3} más...</li>}
-                                                            </ul>
-                                                        </div>
-                                                    )}
                                                     <p className="mt-1">
                                                         Estado:{" "}
                                                         <span className="font-medium capitalize">
@@ -1068,30 +1063,12 @@ export function Dishes({ user }) {
                                                                 ? "En espera"
                                                                 : status === "preparando"
                                                                     ? "En preparación"
-                                                                    : "Listo para recoger"}
+                                                                    : status === "listo"
+                                                                        ? "Listo para recoger"
+                                                                        : "Entregado"}
                                                         </span>
                                                     </p>
                                                 </div>
-
-                                                {user?.role === "admin" && (
-                                                    <div className="flex justify-between">
-                                                        {getStatusActions(order)}
-                                                        <div className="flex gap-2">
-                                                            <button
-                                                                onClick={() => handleEditDish(order)}
-                                                                className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm rounded-md transition-colors"
-                                                            >
-                                                                Editar
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteClick(order.id)}
-                                                                className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors"
-                                                            >
-                                                                <Trash size={16} />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
                                             </div>
                                         ))}
 
@@ -1104,7 +1081,9 @@ export function Dishes({ user }) {
                                                         ? "pendientes"
                                                         : status === "preparando"
                                                             ? "en preparación"
-                                                            : "listas"}
+                                                            : status === "listo"
+                                                                ? "listas"
+                                                                : "entregadas"}
                                                 </p>
                                             </div>
                                         )}
@@ -1124,39 +1103,41 @@ export function Dishes({ user }) {
                         </div>
                     )}
                 </div>
-
-                {/* Órdenes entregadas */}
-                {orders.filter((order) => order.status === "entregado").length > 0 && (
-                    <div className="bg-white rounded-lg border p-6 shadow-sm">
-                        <h3 className="text-lg font-semibold mb-4">Órdenes Entregadas Hoy</h3>
-                        <div className="space-y-2">
-                            {orders
-                                .filter((order) => order.status === "entregado")
-                                .map((order) => (
-                                    <div key={order.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                        <div className="flex items-center gap-3">
-                                            <CheckCircle className="w-5 h-5 text-green-500" />
-                                            <span className="font-medium">{order.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-sm text-gray-500">{order.time}</span>
-                                            {/* {order.price > 0 && <span className="font-medium text-green-600">${order.price.toFixed(2)}</span>} */}
-                                        </div>
-                                    </div>
-                                ))}
-                        </div>
-                    </div>
-                )}
             </div>
         )
     }
 
+    // Vista para administradores
     return (
         <div className="space-y-6">
             <ConnectionStatus onRetry={handleRetry} />
 
+            {/* Header con estadísticas */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-lg p-6 text-white">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold mb-2">Gestión de Platos y Órdenes</h2>
+                        <p className="text-orange-100">Administra tu menú y supervisa las órdenes</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <div className="text-2xl font-bold">{availableDishes.length}</div>
+                            <div className="text-sm text-orange-100">Platos</div>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <div className="text-2xl font-bold">{orders.length}</div>
+                            <div className="text-sm text-orange-100">Órdenes</div>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-3">
+                            <div className="text-2xl font-bold">{getOrdersByStatus("pendiente").length}</div>
+                            <div className="text-sm text-orange-100">Pendientes</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Estadísticas rápidas */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div className="bg-white rounded-lg border p-4 shadow-sm">
                     <div className="flex items-center justify-between">
                         <div>
@@ -1196,139 +1177,339 @@ export function Dishes({ user }) {
                         <CheckCircle className="w-8 h-8 text-green-500" />
                     </div>
                 </div>
-            </div>
 
-            {/* Platos Disponibles (sin estado) */}
-            <div className="bg-white rounded-lg border p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold">Platos Disponibles</h2>
-
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleRetry}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors disabled:opacity-50"
-                            disabled={loading || isRetrying}
-                        >
-                            <RefreshCw size={16} className={loading || isRetrying ? "animate-spin" : ""} />
-                            Actualizar
-                        </button>
-
-                        {user?.role === "admin" && (
-                            <button
-                                onClick={handleAddNewDish}
-                                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors flex items-center gap-2"
-                                disabled={loading || isOffline}
-                            >
-                                <Package className="w-4 h-4" />
-                                Nuevo Plato
-                            </button>
-                        )}
+                <div className="bg-white rounded-lg border p-4 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-gray-500">Entregados</p>
+                            <p className="text-2xl font-bold text-gray-600">{getOrdersByStatus("entregado").length}</p>
+                        </div>
+                        <CheckCircle className="w-8 h-8 text-gray-500" />
                     </div>
                 </div>
+            </div>
 
-                {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                        <p className="ml-3 text-gray-500">Cargando platos...</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {availableDishes.length > 0 ? (
-                            availableDishes.map((dish) => (
-                                <div
-                                    key={dish.id}
-                                    className="border rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow"
+            {/* Gestión de Platos */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                    <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900 mb-1">Gestión de Platos</h2>
+                            <p className="text-gray-600">Administra tu menú de platos</p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {/* Búsqueda */}
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar platos..."
+                                    value={dishSearchTerm}
+                                    onChange={(e) => setDishSearchTerm(e.target.value)}
+                                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    disabled={isOffline}
+                                />
+                            </div>
+
+                            {/* Filtros */}
+                            <button
+                                onClick={() => setShowDishFilters(!showDishFilters)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${showDishFilters
+                                    ? "bg-orange-50 border-orange-200 text-orange-700"
+                                    : "border-gray-300 hover:bg-gray-50"
+                                    }`}
+                            >
+                                <Filter size={16} />
+                                Filtros
+                            </button>
+
+                            {/* Vista */}
+                            <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                                <button
+                                    onClick={() => setDishViewMode("grid")}
+                                    className={`p-2 ${dishViewMode === "grid" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                                 >
-                                    {/* Imagen del plato (placeholder) */}
-                                    <div className="aspect-video bg-gray-200 relative">
-                                        <img
-                                            src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
-                                            alt={dish.name}
-                                            className="w-full h-full object-cover"
+                                    <Grid size={18} />
+                                </button>
+                                <button
+                                    onClick={() => setDishViewMode("list")}
+                                    className={`p-2 ${dishViewMode === "list" ? "bg-orange-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+                                >
+                                    <List size={18} />
+                                </button>
+                            </div>
+
+                            {/* Botones de acción */}
+                            <button
+                                onClick={handleRetry}
+                                className="flex items-center gap-2 px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+                                disabled={loading || isRetrying}
+                            >
+                                <RefreshCw size={16} className={loading || isRetrying ? "animate-spin" : ""} />
+                                Actualizar
+                            </button>
+
+                            <button
+                                onClick={handleAddNewDish}
+                                className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                                disabled={loading || isOffline}
+                            >
+                                <Plus size={20} />
+                                Nuevo Plato
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Panel de filtros expandible */}
+                    {showDishFilters && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+                                    <select
+                                        value={dishFilterCategory}
+                                        onChange={(e) => setDishFilterCategory(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    >
+                                        <option value="all">Todas las categorías</option>
+                                        {categories.map((category) => (
+                                            <option key={category.category_id} value={category.category_id}>
+                                                {category.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Ordenar por</label>
+                                    <select
+                                        value={dishSortBy}
+                                        onChange={(e) => setDishSortBy(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    >
+                                        <option value="name">Nombre</option>
+                                        <option value="category">Categoría</option>
+                                        <option value="price">Precio</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
+                                    <select
+                                        value={dishSortOrder}
+                                        onChange={(e) => setDishSortOrder(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                    >
+                                        <option value="asc">Ascendente</option>
+                                        <option value="desc">Descendente</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Contenido de platos */}
+                <div className="p-6">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+                            <p className="ml-3 text-gray-500">Cargando platos...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Vista de cuadrícula */}
+                            {dishViewMode === "grid" && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                    {paginatedDishes.map((dish) => (
+                                        <DishManagementCard
+                                            key={dish.id}
+                                            dish={dish}
+                                            categories={categories}
+                                            onEdit={handleEditDish}
+                                            onDelete={handleDeleteClick}
+                                            isOffline={isOffline}
                                         />
-                                    </div>
+                                    ))}
+                                </div>
+                            )}
 
-                                    <div className="p-4">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <h3 className="font-semibold text-gray-900">{dish.name}</h3>
-                                            {dish.category_id && categories.length > 0 && (
-                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
-                                                    {categories.find((c) => c.category_id === dish.category_id)?.name || "Sin categoría"}
-                                                </span>
-                                            )}
-                                        </div>
+                            {/* Vista de lista */}
+                            {dishViewMode === "list" && (
+                                <div className="space-y-4">
+                                    {paginatedDishes.map((dish) => (
+                                        <div
+                                            key={dish.id}
+                                            className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <UtensilsCrossed size={20} className="text-orange-500" />
+                                                        <h3 className="font-semibold text-gray-900 text-lg">{dish.name}</h3>
+                                                        {categories.find((c) => c.category_id === dish.category_id) && (
+                                                            <span className="text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                                                                {categories.find((c) => c.category_id === dish.category_id)?.name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-6 text-sm">
+                                                        <span className="text-gray-500">
+                                                            Precio:{" "}
+                                                            <span className="font-medium text-green-600">${dish.price}</span>
+                                                        </span>
+                                                        {dish.products && dish.products.length > 0 && (
+                                                            <span className="text-gray-500">
+                                                                Stock:{" "}
+                                                                <span className="font-medium text-gray-900">
+                                                                    {dish.products.reduce(
+                                                                        (total, product) => total + (product.product_detail?.quantity || 0),
+                                                                        0,
+                                                                    )}
+                                                                </span>
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
 
-                                        <div className="mb-3">
-                                            {dish.products && dish.products.length > 0 && (
-                                                <p className="text-sm text-gray-600">
-                                                    {dish.products.length} {dish.products.length === 1 ? "producto" : "productos"}
-                                                </p>
-                                            )}
-                                            {/* <p className="text-lg font-bold text-green-600 mt-1">${dish.price.toFixed(2)}</p> */}
-                                        </div>
-
-                                        <div className="flex justify-between items-center">
-                                            {user?.role === "admin" && (
-                                                <div className="flex gap-2">
+                                                <div className="flex items-center gap-2 ml-4">
                                                     <button
                                                         onClick={() => handleEditDish(dish)}
-                                                        className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm rounded-md transition-colors"
+                                                        disabled={isOffline}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors disabled:opacity-50"
                                                     >
+                                                        <Edit size={16} />
                                                         Editar
                                                     </button>
                                                     <button
                                                         onClick={() => handleDeleteClick(dish.id)}
-                                                        className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors"
+                                                        disabled={isOffline}
+                                                        className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors disabled:opacity-50"
                                                     >
-                                                        <Trash size={16} />
+                                                        <Trash2 size={16} />
+                                                        Eliminar
                                                     </button>
                                                 </div>
-                                            )}
-                                            <button
-                                                onClick={() => handleAddToCart(dish)}
-                                                className="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-sm rounded-md transition-colors flex items-center gap-1"
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Estado vacío */}
+                            {filteredDishes.length === 0 && !loading && (
+                                <div className="text-center py-12">
+                                    <UtensilsCrossed className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                        {dishSearchTerm || dishFilterCategory !== "all" ? "No se encontraron platos" : "No hay platos"}
+                                    </h3>
+                                    <p className="text-gray-500 mb-4">
+                                        {dishSearchTerm || dishFilterCategory !== "all"
+                                            ? "Intenta ajustar los filtros de búsqueda"
+                                            : "Comienza agregando tu primer plato"}
+                                    </p>
+                                    {!dishSearchTerm && dishFilterCategory === "all" && (
+                                        <button
+                                            onClick={handleAddNewDish}
+                                            className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors"
+                                            disabled={isOffline}
+                                        >
+                                            <Plus size={20} />
+                                            Agregar Plato
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Paginación */}
+                            {dishTotalPages > 1 && (
+                                <div className="mt-6 pt-4 border-t border-gray-200">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-gray-700">
+                                                Mostrando {dishStartIndex + 1} a{" "}
+                                                {Math.min(dishStartIndex + dishItemsPerPage, filteredDishes.length)} de {filteredDishes.length}{" "}
+                                                platos
+                                            </span>
+                                            <select
+                                                value={dishItemsPerPage}
+                                                onChange={(e) => {
+                                                    setDishItemsPerPage(Number(e.target.value))
+                                                    setDishCurrentPage(1)
+                                                }}
+                                                className="ml-2 px-2 py-1 border border-gray-300 rounded text-sm"
                                             >
-                                                <ShoppingCart size={16} />
-                                                Preparar
+                                                <option value={12}>12 por página</option>
+                                                <option value={24}>24 por página</option>
+                                                <option value={48}>48 por página</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => setDishCurrentPage(Math.max(1, dishCurrentPage - 1))}
+                                                disabled={dishCurrentPage === 1}
+                                                className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                            >
+                                                <ChevronLeft size={16} />
+                                            </button>
+
+                                            <div className="flex items-center gap-1">
+                                                {Array.from({ length: Math.min(5, dishTotalPages) }, (_, i) => {
+                                                    let pageNum
+                                                    if (dishTotalPages <= 5) {
+                                                        pageNum = i + 1
+                                                    } else if (dishCurrentPage <= 3) {
+                                                        pageNum = i + 1
+                                                    } else if (dishCurrentPage >= dishTotalPages - 2) {
+                                                        pageNum = dishTotalPages - 4 + i
+                                                    } else {
+                                                        pageNum = dishCurrentPage - 2 + i
+                                                    }
+
+                                                    return (
+                                                        <button
+                                                            key={pageNum}
+                                                            onClick={() => setDishCurrentPage(pageNum)}
+                                                            className={`px-3 py-1 rounded-lg ${dishCurrentPage === pageNum
+                                                                ? "bg-orange-500 text-white"
+                                                                : "border border-gray-300 hover:bg-gray-50"
+                                                                }`}
+                                                        >
+                                                            {pageNum}
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+
+                                            <button
+                                                onClick={() => setDishCurrentPage(Math.min(dishTotalPages, dishCurrentPage + 1))}
+                                                disabled={dishCurrentPage === dishTotalPages}
+                                                className="p-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                            >
+                                                <ChevronRight size={16} />
                                             </button>
                                         </div>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <div className="col-span-full text-center py-12 text-gray-500">
-                                <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                <p>No hay platos disponibles</p>
-                                {user?.role === "admin" && (
-                                    <button
-                                        onClick={handleAddNewDish}
-                                        className="mt-4 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors inline-flex items-center gap-2"
-                                    >
-                                        <Plus size={16} />
-                                        Crear nuevo plato
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Tablero de órdenes */}
             <div className="bg-white rounded-lg border p-6 shadow-sm">
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold">
-                        {user?.role === "admin" ? "Gestión de Platos - Órdenes en Preparación" : "Mis Órdenes"}
-                    </h2>
+                    <h2 className="text-xl font-semibold">Gestión de Órdenes</h2>
                 </div>
 
                 {loading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-                        <p className="ml-3 text-gray-500">Cargando platos...</p>
+                        <p className="ml-3 text-gray-500">Cargando órdenes...</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         {statusList.map((status) => (
                             <div key={status} className="border rounded-lg p-4 bg-gray-50">
                                 <div className="flex items-center justify-between mb-4">
@@ -1350,7 +1531,7 @@ export function Dishes({ user }) {
                                             </div>
 
                                             <div className="text-sm text-gray-600 mb-3">
-                                                {/* <p className="font-medium text-green-600 text-base mb-1">${(order.price || 0).toFixed(2)}</p> */}
+                                                <p className="font-medium text-green-600 text-base mb-1">${order.price}</p>
                                                 {order.category_id && categories.length > 0 && (
                                                     <p>
                                                         Categoría:{" "}
@@ -1359,40 +1540,9 @@ export function Dishes({ user }) {
                                                         </span>
                                                     </p>
                                                 )}
-                                                {order.products && order.products.length > 0 && (
-                                                    <div>
-                                                        <p className="font-medium mt-1">Productos ({order.products.length}):</p>
-                                                        <ul className="list-disc list-inside pl-2 text-xs">
-                                                            {order.products.slice(0, 3).map((prod, idx) => (
-                                                                <li key={idx}>
-                                                                    {prod.name || `Producto ${idx + 1}`} x{prod.quantity || 1}
-                                                                </li>
-                                                            ))}
-                                                            {order.products.length > 3 && <li>Y {order.products.length - 3} más...</li>}
-                                                        </ul>
-                                                    </div>
-                                                )}
                                             </div>
 
-                                            {user?.role === "admin" && (
-                                                <div className="flex justify-between">
-                                                    {getStatusActions(order)}
-                                                    <div className="flex gap-2">
-                                                        <button
-                                                            onClick={() => handleEditDish(order)}
-                                                            className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm rounded-md transition-colors"
-                                                        >
-                                                            Editar
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteClick(order.id)}
-                                                            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-sm rounded-md transition-colors"
-                                                        >
-                                                            <Trash size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <div className="flex justify-between">{getStatusActions(order)}</div>
                                         </div>
                                     ))}
 
@@ -1401,7 +1551,13 @@ export function Dishes({ user }) {
                                             <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                                             <p>
                                                 No hay órdenes{" "}
-                                                {status === "pendiente" ? "pendientes" : status === "preparando" ? "en preparación" : "listas"}
+                                                {status === "pendiente"
+                                                    ? "pendientes"
+                                                    : status === "preparando"
+                                                        ? "en preparación"
+                                                        : status === "listo"
+                                                            ? "listas"
+                                                            : "entregadas"}
                                             </p>
                                         </div>
                                     )}
@@ -1411,33 +1567,6 @@ export function Dishes({ user }) {
                     </div>
                 )}
             </div>
-
-            {/* Órdenes entregadas (solo para admin) */}
-            {user?.role === "admin" && (
-                <div className="bg-white rounded-lg border p-6 shadow-sm">
-                    <h3 className="text-lg font-semibold mb-4">Órdenes Entregadas Hoy</h3>
-                    <div className="space-y-2">
-                        {orders
-                            .filter((order) => order.status === "entregado")
-                            .map((order) => (
-                                <div key={order.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <CheckCircle className="w-5 h-5 text-green-500" />
-                                        <span className="font-medium">{order.name}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-sm text-gray-500">{order.time}</span>
-                                        {/* {order.price > 0 && <span className="font-medium text-green-600">${order.price.toFixed(2)}</span>} */}
-                                    </div>
-                                </div>
-                            ))}
-
-                        {orders.filter((order) => order.status === "entregado").length === 0 && (
-                            <p className="text-center py-4 text-gray-500">No hay órdenes entregadas hoy</p>
-                        )}
-                    </div>
-                </div>
-            )}
 
             {/* Modal para agregar/editar plato */}
             {isModalOpen && (
@@ -1452,6 +1581,7 @@ export function Dishes({ user }) {
                                 handleSaveDish({
                                     name: formData.get("name"),
                                     category_id: formData.get("category_id"),
+                                    price: formData.get("price"),
                                 })
                             }}
                         >
@@ -1462,7 +1592,7 @@ export function Dishes({ user }) {
                                         type="text"
                                         name="name"
                                         defaultValue={editingDish?.name || ""}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                                         required
                                     />
                                 </div>
@@ -1472,7 +1602,7 @@ export function Dishes({ user }) {
                                     <select
                                         name="category_id"
                                         defaultValue={editingDish?.category_id || ""}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                                     >
                                         <option value="">Seleccionar categoría</option>
                                         {categories.map((category) => (
@@ -1483,20 +1613,33 @@ export function Dishes({ user }) {
                                     </select>
                                 </div>
 
-                                {/* Sección de productos */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Precio del Plato</label>
+                                    <input
+                                        type="number"
+                                        name="price"
+                                        step="0.01"
+                                        min="0"
+                                        defaultValue={editingDish?.price || ""}
+                                        placeholder="0.00"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        required
+                                    />
+                                </div>
+
+                                {/* Sección de productos simplificada */}
                                 <div className="border rounded-lg p-4 bg-gray-50">
                                     <h4 className="font-medium text-gray-700 mb-3">Productos del Plato</h4>
 
-                                    {/* Selector de productos */}
                                     <div className="flex gap-2 mb-4">
                                         <select
                                             id="product-selector"
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                                         >
                                             <option value="">Seleccionar producto</option>
                                             {products.map((product) => (
                                                 <option key={product.products_id} value={product.products_id}>
-                                                    {product.name} - ${product.product_detail?.price?.toFixed(2) || "0.00"}
+                                                    {product.name} - ${product.product_detail?.price}
                                                 </option>
                                             ))}
                                         </select>
@@ -1505,20 +1648,18 @@ export function Dishes({ user }) {
                                             onClick={() => {
                                                 const select = document.getElementById("product-selector")
                                                 if (select && select.value) {
-                                                    console.log("Valor seleccionado:", select.value)
-                                                    handleAddProduct(select.value, 1)
+                                                    handleAddProduct(select.value)
+                                                    select.value = ""
                                                 } else {
-                                                    console.log("No se seleccionó ningún producto")
                                                     showWarning("Advertencia", "Por favor seleccione un producto")
                                                 }
                                             }}
-                                            className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors"
+                                            className="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
                                         >
-                                            <Plus size={18} />
+                                            +
                                         </button>
                                     </div>
 
-                                    {/* Lista de productos seleccionados */}
                                     <div className="space-y-2 max-h-60 overflow-y-auto">
                                         {selectedProducts.length === 0 ? (
                                             <p className="text-center py-4 text-gray-500">No hay productos seleccionados</p>
@@ -1530,59 +1671,20 @@ export function Dishes({ user }) {
                                                 >
                                                     <div className="flex-1">
                                                         <p className="font-medium">{product.name}</p>
-                                                        {/* <p className="text-sm text-gray-600">
-                                                            Precio unitario: $
-                                                            {product.product_detail?.price?.toFixed(2) || product.price?.toFixed(2) || "0.00"}
-                                                        </p> */}
+                                                        <p className="text-sm text-gray-600">
+                                                            ${product.product_detail?.price}
+                                                        </p>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="flex items-center border rounded-md overflow-hidden">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleUpdateProductQuantity(product.products_id, (product.quantity || 1) - 1)
-                                                                }
-                                                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700"
-                                                            >
-                                                                -
-                                                            </button>
-                                                            <input
-                                                                type="number"
-                                                                min="1"
-                                                                value={product.quantity || 1}
-                                                                onChange={(e) =>
-                                                                    handleUpdateProductQuantity(product.products_id, Number(e.target.value))
-                                                                }
-                                                                className="w-12 text-center border-x px-1 py-1"
-                                                            />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleUpdateProductQuantity(product.products_id, (product.quantity || 1) + 1)
-                                                                }
-                                                                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700"
-                                                            >
-                                                                +
-                                                            </button>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRemoveProduct(product.products_id)}
-                                                            className="p-1 text-red-500 hover:text-red-700"
-                                                        >
-                                                            <Trash size={18} />
-                                                        </button>
-                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveProduct(product.products_id)}
+                                                        className="p-1 text-red-500 hover:text-red-700"
+                                                    >
+                                                        ×
+                                                    </button>
                                                 </div>
                                             ))
                                         )}
-                                    </div>
-
-                                    {/* Precio total */}
-                                    <div className="mt-4 text-right">
-                                        {/* <p className="text-lg font-bold">
-                                            Total: <span className="text-green-600">${totalPrice.toFixed(2)}</span>
-                                        </p> */}
                                     </div>
                                 </div>
 
@@ -1600,7 +1702,7 @@ export function Dishes({ user }) {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-md transition-colors"
+                                        className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md transition-colors"
                                         disabled={loading}
                                     >
                                         {loading ? (
@@ -1622,16 +1724,30 @@ export function Dishes({ user }) {
             )}
 
             {/* Diálogo de confirmación para eliminar */}
-            <ConfirmationDialog
-                isOpen={deleteConfirm.isOpen}
-                onClose={() => setDeleteConfirm({ isOpen: false, dishId: null })}
-                onConfirm={handleDeleteConfirm}
-                title="Eliminar Plato"
-                message="¿Estás seguro de que quieres eliminar este plato? Esta acción no se puede deshacer."
-                confirmText="Eliminar"
-                cancelText="Cancelar"
-                type="danger"
-            />
+            {deleteConfirm.isOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                        <h3 className="text-lg font-semibold mb-4">Eliminar Plato</h3>
+                        <p className="text-gray-600 mb-6">
+                            ¿Estás seguro de que quieres eliminar este plato? Esta acción no se puede deshacer.
+                        </p>
+                        <div className="flex justify-end gap-2">
+                            <button
+                                onClick={() => setDeleteConfirm({ isOpen: false, dishId: null })}
+                                className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-md transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleDeleteConfirm}
+                                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors"
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
