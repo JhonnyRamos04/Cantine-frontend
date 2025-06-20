@@ -194,14 +194,15 @@ function DishCard({ dish, onAddToCart, categories }) {
     // Verificar stock disponible
     const hasStock =
         dish.products && Array.isArray(dish.products)
-            ? dish.products.every((product) => product.product_detail && product.product_detail.quantity > 0)
+            ? dish.products.every((product) => product?.product_detail && product?.product_detail.quantity > 0)
             : true
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
             <div className="aspect-w-16 aspect-h-12 bg-gray-200 relative">
+                {/* Se usa dish.img para la imagen del plato */}
                 <img
-                    src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
+                    src={dish.img}
                     alt={dish.name}
                     className="w-full h-48 object-cover"
                 />
@@ -271,8 +272,9 @@ function DishListItem({ dish, onAddToCart, categories }) {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
             <div className="flex gap-4">
                 <div className="flex-shrink-0 relative">
+                    {/* Se usa dish.img para la imagen del plato */}
                     <img
-                        src={`https://placehold.co/120x120/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
+                        src={dish.img}
                         alt={dish.name}
                         className="w-24 h-24 object-cover rounded-lg"
                     />
@@ -349,8 +351,9 @@ function DishManagementCard({ dish, categories, onEdit, onDelete, isOffline }) {
     return (
         <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
             <div className="aspect-video bg-gray-200 relative mb-4 rounded-lg overflow-hidden">
+                {/* Se usa dish.img para la imagen del plato en la tarjeta de gestión */}
                 <img
-                    src={`https://placehold.co/300x200/cccccc/000000?text=${encodeURIComponent(dish.name)}`}
+                    src={dish.img}
                     alt={dish.name}
                     className="w-full h-full object-cover"
                 />
@@ -514,6 +517,7 @@ export function Dishes({ user }) {
                         dishes_id: dish.dishes_id,
                         name: dish.name,
                         price: dish.price || 0,
+                        img: dish.img, // Asegura que el campo 'img' se mapee
                         category_id: dish.category_id,
                         products_id: dish.products_id,
                         products: dish.products || [],
@@ -842,6 +846,7 @@ export function Dishes({ user }) {
                 if (originalDish && originalDish.dishes_id) {
                     const dishData = {
                         name: formData.name,
+                        img: formData.img, // El campo img se incluye aquí
                         category_id: formData.category_id || null,
                         status_id: originalDish.status_id,
                         products_id: selectedProductId,
@@ -860,6 +865,7 @@ export function Dishes({ user }) {
                 const dishData = {
                     name: formData.name,
                     category_id: formData.category_id || null,
+                    img: formData.img, // El campo img se incluye aquí
                     products_id: selectedProductId,
                     price: manualPrice,
                 }
@@ -895,7 +901,7 @@ export function Dishes({ user }) {
             return
         }
 
-        if (user?.role !== "admin") {
+        if (user?.role.name !== "admin") {
             showWarning("Acceso denegado", "No tienes permisos para eliminar platos")
             return
         }
@@ -991,7 +997,7 @@ export function Dishes({ user }) {
     }
 
     // Vista para clientes (ecommerce)
-    if (user?.role === "client") {
+    if (user?.role.name === "cliente") {
         return (
             <div className="space-y-6">
                 <ConnectionStatus onRetry={handleRetry} />
@@ -1138,7 +1144,7 @@ export function Dishes({ user }) {
                 <div className="flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-bold mb-2">Gestión de Platos y Órdenes</h2>
-                        <p className="text-orange-100">Administra tu menú y supervisa las órdenes</p>
+                        <p className="text-orange-100">Administra tu menú de platos y supervisa las órdenes</p>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-center">
                         <div className="bg-white/20 rounded-lg p-3">
@@ -1603,6 +1609,7 @@ export function Dishes({ user }) {
                                     name: formData.get("name"),
                                     category_id: formData.get("category_id"),
                                     price: formData.get("price"),
+                                    img: formData.get("img"), // Asegura que el campo 'img' se pase al guardar
                                 })
                             }}
                         >
@@ -1613,6 +1620,17 @@ export function Dishes({ user }) {
                                         type="text"
                                         name="name"
                                         defaultValue={editingDish?.name || ""}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Link de la Imagen</label> {/* Etiqueta actualizada */}
+                                    <input
+                                        type="text"
+                                        name="img"
+                                        defaultValue={editingDish?.img || ""}
+                                        placeholder="https://ejemplo.com/imagen.jpg" // Placeholder de ejemplo
                                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
                                         required
                                     />
