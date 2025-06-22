@@ -1,15 +1,20 @@
 // Este es un EJEMPLO de cómo podrías tener tu AuthForms.jsx
 // Ajusta según la estructura real de tu componente.
 
+
+
 import React, { useState } from 'react';
 import { Lock, Mail, UserPlus, Leaf, ChefHat, Apple, ArrowRight, ArrowLeft, User } from "lucide-react";
 import { register, login } from '../utils/auth'; // Asegúrate de que la ruta sea correcta
+const CLIENT_ID = import.meta.env.VITE_CLIENT_ID
+
 
 export default function AuthForms({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
 
   // Estados del formulario de login
   const [loginData, setLoginData] = useState({
@@ -23,7 +28,7 @@ export default function AuthForms({ onLoginSuccess }) {
     email: "",
     password: "",
     // Eliminado: confirmPassword
-    roles_id: "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22" // ¡IMPORTANTE! Asegúrate de que este ID de rol exista en tu base de datos
+    roles_id: `${CLIENT_ID}` // ¡IMPORTANTE! Asegúrate de que este ID de rol exista en tu base de datos
   });
 
   const toggleForm = () => {
@@ -36,7 +41,7 @@ export default function AuthForms({ onLoginSuccess }) {
       email: "",
       password: "",
       // Eliminado: confirmPassword
-      roles_id: "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22" // Resetear también roles_id
+      roles_id: `${CLIENT_ID}` // Resetear también roles_id
     });
     setTimeout(() => {
       setIsLogin(!isLogin);

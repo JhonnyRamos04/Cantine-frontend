@@ -161,7 +161,7 @@ export function Product({ user }) {
             return
         }
 
-        if (user?.role !== "admin") {
+        if (user?.role.name !== "admin") {
             showWarning("Acceso denegado", "No tienes permisos para eliminar elementos")
             return
         }

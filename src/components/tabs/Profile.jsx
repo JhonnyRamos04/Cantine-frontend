@@ -67,7 +67,7 @@ export function Profile({ user }) {
                             </div>
                         </div>
 
-                        {!isEditing && (
+                        {/* {!isEditing && (
                             <button
                                 onClick={handleEdit}
                                 className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -75,7 +75,7 @@ export function Profile({ user }) {
                                 <Edit3 size={16} />
                                 Editar Perfil
                             </button>
-                        )}
+                        )} */}
                     </div>
                 </div>
 
